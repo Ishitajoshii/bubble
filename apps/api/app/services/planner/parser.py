@@ -5,7 +5,7 @@ from typing import Any, Literal
 AGGREGATE_PATTERN = re.compile(
     r"^select\s+"
     r"(?:(?P<select_group>[a-z_][a-z0-9_]*)\s*,\s*)?"
-    r"(?P<aggregate>count\(\*\)|count\([a-z_][a-z0-9_]*\)|sum\([a-z_][a-z0-9_]*\)|avg\([a-z_][a-z0-9_]*\))"
+    r"(?P<aggregate>count\(\*\)|count\(distinct\s+[a-z_][a-z0-9_]*\)|count\([a-z_][a-z0-9_]*\)|sum\([a-z_][a-z0-9_]*\)|avg\([a-z_][a-z0-9_]*\))"
     r"(?:\s+as\s+(?P<alias>[a-z_][a-z0-9_]*))?"
     r"\s+from\s+(?P<table>[a-z_][a-z0-9_]*)"
     r"(?:\s+where\s+(?P<where>.+?))?"
@@ -49,10 +49,15 @@ class AdaptiveAggregateQuery:
     filters: list[FilterPredicate] = field(default_factory=list)
     group_by_column: str | None = None
     order_by: OrderBySpec | None = None
+    distinct: bool = False
 
     @property
     def is_grouped(self) -> bool:
         return self.group_by_column is not None
+
+    @property
+    def is_distinct_count(self) -> bool:
+        return self.aggregate_function == "count" and self.distinct
 
     def projection_sql(self) -> str:
         projections: list[str] = []
@@ -74,11 +79,14 @@ class AdaptiveAggregateQuery:
 
     def exact_sql(self) -> str:
         aggregate = self.aggregate_function.upper()
-        aggregate_expression = (
-            f"{aggregate}(*)"
-            if self.aggregate_column is None
-            else f"{aggregate}({self.aggregate_column})"
-        )
+        if self.is_distinct_count:
+            aggregate_expression = f"{aggregate}(DISTINCT {self.aggregate_column})"
+        else:
+            aggregate_expression = (
+                f"{aggregate}(*)"
+                if self.aggregate_column is None
+                else f"{aggregate}({self.aggregate_column})"
+            )
         select_list = [f"{aggregate_expression} AS {self.alias}"]
         if self.group_by_column is not None:
             select_list.insert(0, self.group_by_column)
@@ -131,7 +139,9 @@ def parse_adaptive_query(sql: str) -> AdaptiveAggregateQuery:
         )
 
     aggregate_expression = match.group("aggregate").lower()
-    aggregate_function, aggregate_column = _parse_aggregate_expression(aggregate_expression)
+    aggregate_function, aggregate_column, distinct = _parse_aggregate_expression(
+        aggregate_expression
+    )
     alias = match.group("alias") or default_alias(aggregate_function, aggregate_column)
     where_clause = match.group("where")
     select_group = _normalize_identifier(match.group("select_group"))
@@ -158,6 +168,7 @@ def parse_adaptive_query(sql: str) -> AdaptiveAggregateQuery:
         filters=parse_predicates(where_clause),
         group_by_column=group_by_column,
         order_by=order_by,
+        distinct=distinct,
     )
     return query
 
@@ -214,6 +225,8 @@ def parse_literal(token: str) -> Any:
 def default_alias(aggregate_function: str, aggregate_column: str | None) -> str:
     if aggregate_function == "count" and aggregate_column is None:
         return "row_count"
+    if aggregate_function == "count" and aggregate_column is not None:
+        return f"count_{aggregate_column}"
     if aggregate_column is None:
         return aggregate_function
     return f"{aggregate_function}_{aggregate_column}"
@@ -230,12 +243,14 @@ def sql_literal(value: Any) -> str:
 
 def _parse_aggregate_expression(
     aggregate_expression: str,
-) -> tuple[Literal["count", "sum", "avg"], str | None]:
+) -> tuple[Literal["count", "sum", "avg"], str | None, bool]:
     function_name = aggregate_expression.split("(", 1)[0]
     column = aggregate_expression[aggregate_expression.find("(") + 1 : -1].strip()
     if function_name == "count" and column == "*":
-        return "count", None
-    return function_name, column
+        return "count", None, False
+    if function_name == "count" and column.startswith("distinct "):
+        return "count", column[len("distinct ") :].strip(), True
+    return function_name, column, False
 
 
 def parse_order_by(

@@ -38,10 +38,64 @@ def route_query(
             or "Query is outside the supported approximation subset.",
         )
 
+    if query.is_distinct_count:
+        if query.is_grouped:
+            if group_populations is None:
+                return _exact_fallback(
+                    confidence_level=confidence_level,
+                    target_error_pct=target_error_pct,
+                    target_summary=target_summary,
+                    reason="Could not determine grouped strata for grouped HyperLogLog.",
+                )
+
+            distinct_groups = len(group_populations)
+            if distinct_groups == 0:
+                return _exact_fallback(
+                    confidence_level=confidence_level,
+                    target_error_pct=target_error_pct,
+                    target_summary=target_summary,
+                    reason="The grouped distinct query has no rows after filtering.",
+                )
+
+            if distinct_groups > _MAX_STRATA:
+                return _exact_fallback(
+                    confidence_level=confidence_level,
+                    target_error_pct=target_error_pct,
+                    target_summary=target_summary,
+                    reason=(
+                        f"Grouped HyperLogLog is limited to {_MAX_STRATA} groups, "
+                        f"but this dataset produced {distinct_groups} groups."
+                    ),
+                )
+
+            return PlannerOutput(
+                strategy="hyperloglog",
+                rationale=(
+                    f"Grouped COUNT(DISTINCT ...) over {distinct_groups} groups uses "
+                    "HyperLogLog registers instead of sampling."
+                ),
+                confidence_level=confidence_level,
+                target_error_pct=target_error_pct,
+                target_summary=target_summary,
+                planner_version=_PLANNER_VERSION,
+            )
+
+        return PlannerOutput(
+            strategy="hyperloglog",
+            rationale=(
+                "COUNT(DISTINCT ...) queries use HyperLogLog instead of sampling; "
+                "precision is sized to the requested error target."
+            ),
+            confidence_level=confidence_level,
+            target_error_pct=target_error_pct,
+            target_summary=target_summary,
+            planner_version=_PLANNER_VERSION,
+        )
+
     if not query.is_grouped:
         return PlannerOutput(
             strategy="adaptive_sampling",
-            rationale="Single-table COUNT, SUM, and AVG queries without GROUP BY use adaptive sampling.",
+            rationale="Single-table COUNT, SUM, and AVG queries without DISTINCT or GROUP BY use adaptive sampling.",
             confidence_level=confidence_level,
             target_error_pct=target_error_pct,
             target_summary=target_summary,

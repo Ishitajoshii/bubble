@@ -877,6 +877,9 @@ function formatStrategyLabel(strategy: string): string {
   if (strategy === "stratified_sampling") {
     return "Stratified sampling";
   }
+  if (strategy === "hyperloglog") {
+    return "HyperLogLog";
+  }
   return strategy.replace(/_/g, " ");
 }
 

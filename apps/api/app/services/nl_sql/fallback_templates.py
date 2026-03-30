@@ -71,8 +71,33 @@ def build_fallback_sql(prompt: str, dataset: DatasetSummary) -> FallbackTemplate
 def _build_schema_aware_fallback(
     *, prompt: str, dataset: DatasetSummary
 ) -> FallbackTemplateResult:
-    aggregate = _choose_aggregate(prompt)
     filters = _extract_filters(prompt=prompt, dataset=dataset)
+
+    if _wants_distinct_count(prompt):
+        distinct_field = _pick_distinct_field(prompt=prompt, dataset=dataset)
+        if distinct_field is not None:
+            group_field = _pick_group_field(prompt=prompt, dataset=dataset)
+            alias = f"unique_{distinct_field.name}"
+            if group_field is not None:
+                sql = (
+                    f"SELECT {group_field.name}, COUNT(DISTINCT {distinct_field.name}) AS {alias} "
+                    f"FROM {dataset.dataset_id}"
+                )
+            else:
+                sql = (
+                    f"SELECT COUNT(DISTINCT {distinct_field.name}) AS {alias} "
+                    f"FROM {dataset.dataset_id}"
+                )
+            if filters:
+                sql += " WHERE " + " AND ".join(filters)
+            if group_field is not None:
+                sql += f" GROUP BY {group_field.name} ORDER BY {alias} DESC"
+            sql += ";"
+            return FallbackTemplateResult(
+                sql=sql
+            )
+
+    aggregate = _choose_aggregate(prompt)
     numeric_field = _pick_numeric_field(prompt=prompt, dataset=dataset)
     group_field = _pick_group_field(prompt=prompt, dataset=dataset)
     warnings: list[str] = []
@@ -127,6 +152,10 @@ def _choose_aggregate(prompt: str) -> str:
     return "count"
 
 
+def _wants_distinct_count(prompt: str) -> bool:
+    return any(token in prompt for token in ("unique", "distinct", "dedup"))
+
+
 def _pick_numeric_field(prompt: str, dataset: DatasetSummary) -> DatasetField | None:
     numeric_fields = [
         field for field in dataset.schema_fields if field.type.upper() in _NUMERIC_TYPES
@@ -139,6 +168,26 @@ def _pick_numeric_field(prompt: str, dataset: DatasetSummary) -> DatasetField | 
     best_score = -1
 
     for field in numeric_fields:
+        field_tokens = _tokenize(
+            " ".join([field.name, field.description, *field.example_values])
+        )
+        score = len(prompt_tokens & field_tokens)
+        if score > best_score:
+            best_score = score
+            best_field = field
+
+    return best_field
+
+
+def _pick_distinct_field(prompt: str, dataset: DatasetSummary) -> DatasetField | None:
+    if len(dataset.schema_fields) == 0:
+        return None
+
+    prompt_tokens = _tokenize(prompt)
+    best_field = dataset.schema_fields[0]
+    best_score = -1
+
+    for field in dataset.schema_fields:
         field_tokens = _tokenize(
             " ".join([field.name, field.description, *field.example_values])
         )
