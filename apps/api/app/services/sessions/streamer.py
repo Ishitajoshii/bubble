@@ -13,6 +13,7 @@ from app.schemas.events import (
     SqlGeneratedPayload,
 )
 from app.services.approx.adaptive_sampling import run_adaptive_sampling
+from app.services.approx.hyperloglog import run_hyperloglog
 from app.services.approx.progress import (
     build_grouped_exact_result_payload,
     build_grouped_final_payload,
@@ -80,6 +81,43 @@ async def stream_session_events(session: QuerySessionState) -> AsyncIterator[str
                 progress=progress_payloads[-1],
                 stopped_reason=sampling_result.stopped_reason,
             )
+        elif session.planner.strategy == "hyperloglog":
+            sampling_result = run_hyperloglog(
+                dataset=session.dataset,
+                query=session.approx_query,
+                target_error=session.request.error_tolerance,
+                group_populations=session.group_populations,
+            )
+            if session.approx_query.is_grouped:
+                progress_payloads = [
+                    build_grouped_progress_payload(
+                        snapshot=snapshot,
+                        query=session.approx_query,
+                        dataset=session.dataset,
+                        confidence_level=session.request.confidence_level,
+                        target_error_pct=session.planner.target_error_pct,
+                    )
+                    for snapshot in sampling_result.snapshots
+                ]
+                final_payload = build_grouped_final_payload(
+                    progress=progress_payloads[-1],
+                    stopped_reason=sampling_result.stopped_reason,
+                )
+            else:
+                progress_payloads = [
+                    build_scalar_progress_payload(
+                        snapshot=snapshot,
+                        query=session.approx_query,
+                        dataset=session.dataset,
+                        confidence_level=session.request.confidence_level,
+                        target_error_pct=session.planner.target_error_pct,
+                    )
+                    for snapshot in sampling_result.snapshots
+                ]
+                final_payload = build_scalar_final_payload(
+                    progress=progress_payloads[-1],
+                    stopped_reason=sampling_result.stopped_reason,
+                )
         else:
             sampling_result = run_adaptive_sampling(
                 dataset=session.dataset,
@@ -104,11 +142,10 @@ async def stream_session_events(session: QuerySessionState) -> AsyncIterator[str
             )
     except Exception as exc:
         await _sleep_before_event(event_index)
-        strategy_name = (
-            "Stratified sampling"
-            if session.planner.strategy == "stratified_sampling"
-            else "Adaptive sampling"
-        )
+        strategy_name = {
+            "stratified_sampling": "Stratified sampling",
+            "hyperloglog": "HyperLogLog",
+        }.get(session.planner.strategy, "Adaptive sampling")
         yield encode_sse_event(
             _make_event(
                 session_id=session.session_id,
