@@ -90,10 +90,18 @@ export interface PlanReadyPayload {
   planner: PlannerOutput;
 }
 
-export interface ApproxProgressPayload {
-  iteration: number;
+export interface ApproxGroupEstimate {
+  group_value: string;
   estimate: number;
   display_value: string;
+  relative_error: number;
+  sample_rows: number;
+  population_rows: number;
+}
+
+interface ApproxPayloadBase {
+  result_scope: "scalar" | "grouped";
+  iteration: number;
   sample_fraction: number;
   sample_rows: number;
   data_scanned_pct: number;
@@ -107,12 +115,41 @@ export interface ApproxProgressPayload {
   convergence_point: ConvergencePoint;
 }
 
-export interface ApproxFinalPayload extends ApproxProgressPayload {
+export interface ScalarApproxProgressPayload extends ApproxPayloadBase {
+  result_scope: "scalar";
+  estimate: number;
+  display_value: string;
+}
+
+export interface GroupedApproxProgressPayload extends ApproxPayloadBase {
+  result_scope: "grouped";
+  group_by_column: string;
+  group_count: number;
+  group_rows: ApproxGroupEstimate[];
+  summary_label: string;
+  error_metric_label: string;
+}
+
+export type ApproxProgressPayload =
+  | ScalarApproxProgressPayload
+  | GroupedApproxProgressPayload;
+
+export interface ScalarApproxFinalPayload extends ScalarApproxProgressPayload {
   approx_latency_ms: number;
   stopped_reason: ApproxFinalReason;
 }
 
-export interface ExactResultPayload {
+export interface GroupedApproxFinalPayload extends GroupedApproxProgressPayload {
+  approx_latency_ms: number;
+  stopped_reason: ApproxFinalReason;
+}
+
+export type ApproxFinalPayload =
+  | ScalarApproxFinalPayload
+  | GroupedApproxFinalPayload;
+
+export interface ScalarExactResultPayload {
+  result_scope: "scalar";
   exact_value: number;
   display_value: string;
   exact_latency_ms: number;
@@ -121,6 +158,32 @@ export interface ExactResultPayload {
   delta_pct: number;
   speedup: number;
 }
+
+export interface ExactGroupComparison {
+  group_value: string;
+  approx_estimate: number;
+  approx_display_value: string;
+  exact_value: number;
+  exact_display_value: string;
+  delta: number;
+  delta_pct: number;
+}
+
+export interface GroupedExactResultPayload {
+  result_scope: "grouped";
+  group_by_column: string;
+  group_count: number;
+  rows: ExactGroupComparison[];
+  max_delta_pct: number;
+  mean_delta_pct: number;
+  exact_latency_ms: number;
+  approx_latency_ms: number;
+  speedup: number;
+}
+
+export type ExactResultPayload =
+  | ScalarExactResultPayload
+  | GroupedExactResultPayload;
 
 export interface ErrorPayload {
   code: string;

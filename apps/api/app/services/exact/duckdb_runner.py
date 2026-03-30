@@ -26,10 +26,23 @@ class ExactQueryResult:
 
 
 @dataclass(slots=True)
+class TabularQueryResult:
+    column_names: tuple[str, ...]
+    rows: list[tuple[object, ...]]
+    latency_ms: int
+
+
+@dataclass(slots=True)
 class ProjectionBatch:
     column_names: tuple[str, ...]
     rows: list[tuple[object, ...]]
     latency_ms: int
+
+
+@dataclass(slots=True)
+class GroupPopulation:
+    group_value: object
+    population_rows: int
 
 
 def fetch_projection(
@@ -54,6 +67,33 @@ def run_exact_query(*, dataset: DatasetSummary, sql: str) -> ExactQueryResult:
         latency_ms = max(1, int((perf_counter() - started_at) * 1000))
         value = 0.0 if row is None or row[0] is None else float(row[0])
         return ExactQueryResult(value=value, latency_ms=latency_ms)
+
+
+def run_tabular_query(*, dataset: DatasetSummary, sql: str) -> TabularQueryResult:
+    with _dataset_connection(dataset) as connection:
+        started_at = perf_counter()
+        cursor = connection.execute(sql)
+        rows = cursor.fetchall()
+        latency_ms = max(1, int((perf_counter() - started_at) * 1000))
+        return TabularQueryResult(
+            column_names=tuple(column[0] for column in cursor.description),
+            rows=rows,
+            latency_ms=latency_ms,
+        )
+
+
+def fetch_group_populations(
+    *, dataset: DatasetSummary, sql: str
+) -> tuple[list[GroupPopulation], int]:
+    result = run_tabular_query(dataset=dataset, sql=sql)
+    populations = [
+        GroupPopulation(
+            group_value=row[0],
+            population_rows=int(row[1]),
+        )
+        for row in result.rows
+    ]
+    return populations, result.latency_ms
 
 
 @contextmanager

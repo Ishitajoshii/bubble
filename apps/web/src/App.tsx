@@ -19,9 +19,13 @@ import {
 import { mockCreateQuerySessionRequest } from "./mocks/query-session";
 import type {
   AnyQuerySessionEvent,
+  ApproxGroupEstimate,
   ApproxProgressPayload,
   DatasetSummary,
+  ExactGroupComparison,
   ExactResultPayload,
+  GroupedApproxProgressPayload,
+  GroupedExactResultPayload,
   QuerySessionEvent,
   QuerySessionEventType,
 } from "./types/query";
@@ -374,7 +378,7 @@ export default function App() {
             <dl className="detail-list">
               <div>
                 <dt>Strategy</dt>
-                <dd>{planner.strategy}</dd>
+                <dd>{formatStrategyLabel(planner.strategy)}</dd>
               </div>
               <div>
                 <dt>Reason</dt>
@@ -423,20 +427,47 @@ export default function App() {
             <p className="subtle">Latest event wins.</p>
           </div>
           {latestMetric ? (
-            <dl className="detail-list">
-              <div>
-                <dt>Estimate</dt>
-                <dd>{latestMetric.display_value}</dd>
-              </div>
-              <div>
-                <dt>Relative error</dt>
-                <dd>{formatFractionAsPercent(latestMetric.relative_error)}</dd>
-              </div>
-              <div>
-                <dt>Elapsed</dt>
-                <dd>{formatDuration(latestMetric.elapsed_ms)}</dd>
-              </div>
-            </dl>
+            isGroupedApproxPayload(latestMetric) ? (
+              <>
+                <dl className="detail-list">
+                  <div>
+                    <dt>Summary</dt>
+                    <dd>{latestMetric.summary_label}</dd>
+                  </div>
+                  <div>
+                    <dt>Group by</dt>
+                    <dd>{latestMetric.group_by_column}</dd>
+                  </div>
+                  <div>
+                    <dt>{latestMetric.error_metric_label}</dt>
+                    <dd>{formatFractionAsPercent(latestMetric.relative_error)}</dd>
+                  </div>
+                  <div>
+                    <dt>Elapsed</dt>
+                    <dd>{formatDuration(latestMetric.elapsed_ms)}</dd>
+                  </div>
+                </dl>
+                <GroupedEstimateTable
+                  groupByColumn={latestMetric.group_by_column}
+                  rows={latestMetric.group_rows}
+                />
+              </>
+            ) : (
+              <dl className="detail-list">
+                <div>
+                  <dt>Estimate</dt>
+                  <dd>{latestMetric.display_value}</dd>
+                </div>
+                <div>
+                  <dt>Relative error</dt>
+                  <dd>{formatFractionAsPercent(latestMetric.relative_error)}</dd>
+                </div>
+                <div>
+                  <dt>Elapsed</dt>
+                  <dd>{formatDuration(latestMetric.elapsed_ms)}</dd>
+                </div>
+              </dl>
+            )
           ) : (
             <EmptyState label="Waiting for approximation output." />
           )}
@@ -473,7 +504,43 @@ export default function App() {
             <p className="subtle">Arrives asynchronously after `approx_final`.</p>
           </div>
           {exactResult ? (
-            <>
+            isGroupedExactResult(exactResult) ? (
+              <>
+                <dl className="detail-list">
+                  <div>
+                    <dt>Groups</dt>
+                    <dd>{formatInteger(exactResult.group_count)}</dd>
+                  </div>
+                  <div>
+                    <dt>Max delta</dt>
+                    <dd>{formatFractionAsPercent(exactResult.max_delta_pct)}</dd>
+                  </div>
+                  <div>
+                    <dt>Mean delta</dt>
+                    <dd>{formatFractionAsPercent(exactResult.mean_delta_pct)}</dd>
+                  </div>
+                  <div>
+                    <dt>{runtimeComparison?.label ?? "Runtime"}</dt>
+                    <dd>{runtimeComparison?.value ?? `${exactResult.speedup.toFixed(2)}x`}</dd>
+                  </div>
+                  <div>
+                    <dt>Approx vs exact</dt>
+                    <dd>
+                      {formatDuration(exactResult.approx_latency_ms)} ·{" "}
+                      {formatDuration(exactResult.exact_latency_ms)}
+                    </dd>
+                  </div>
+                </dl>
+                <GroupedExactTable
+                  groupByColumn={exactResult.group_by_column}
+                  rows={exactResult.rows}
+                />
+                {runtimeComparison?.note ? (
+                  <p className="subtle panel-note">{runtimeComparison.note}</p>
+                ) : null}
+              </>
+            ) : (
+              <>
               <dl className="detail-list">
                 <div>
                   <dt>Exact value</dt>
@@ -501,6 +568,7 @@ export default function App() {
                 <p className="subtle panel-note">{runtimeComparison.note}</p>
               ) : null}
             </>
+            )
           ) : (
             <EmptyState label="Waiting for the exact result event." />
           )}
@@ -511,7 +579,9 @@ export default function App() {
         <div className="panel__header">
           <h2>Convergence graph</h2>
           <p className="subtle">
-            Plots streamed `approx_progress` points with the target threshold line.
+            {latestMetric && isGroupedApproxPayload(latestMetric)
+              ? "Plots streamed approx_progress points against the worst per-group error across strata."
+              : "Plots streamed approx_progress points with the target threshold line."}
           </p>
         </div>
         <ConvergenceGraph
@@ -525,6 +595,74 @@ export default function App() {
 
 function EmptyState({ label }: { label: string }) {
   return <div className="empty-state">{label}</div>;
+}
+
+function GroupedEstimateTable({
+  groupByColumn,
+  rows,
+}: {
+  groupByColumn: string;
+  rows: ApproxGroupEstimate[];
+}) {
+  return (
+    <div className="table-shell">
+      <table className="result-table">
+        <thead>
+          <tr>
+            <th>{groupByColumn}</th>
+            <th>Estimate</th>
+            <th>Error</th>
+            <th>Sampled</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.group_value}>
+              <td>{row.group_value}</td>
+              <td>{row.display_value}</td>
+              <td>{formatFractionAsPercent(row.relative_error)}</td>
+              <td>
+                {formatInteger(row.sample_rows)} / {formatInteger(row.population_rows)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GroupedExactTable({
+  groupByColumn,
+  rows,
+}: {
+  groupByColumn: string;
+  rows: ExactGroupComparison[];
+}) {
+  return (
+    <div className="table-shell">
+      <table className="result-table">
+        <thead>
+          <tr>
+            <th>{groupByColumn}</th>
+            <th>Approx</th>
+            <th>Exact</th>
+            <th>Delta</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.group_value}>
+              <td>{row.group_value}</td>
+              <td>{row.approx_display_value}</td>
+              <td>{row.exact_display_value}</td>
+              <td>{formatFractionAsPercent(row.delta_pct)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function ConvergenceGraph({
@@ -718,6 +856,28 @@ function mergeDatasets(
   }
 
   return [...merged.values()];
+}
+
+function isGroupedApproxPayload(
+  payload: ApproxProgressPayload,
+): payload is GroupedApproxProgressPayload {
+  return payload.result_scope === "grouped";
+}
+
+function isGroupedExactResult(
+  payload: ExactResultPayload,
+): payload is GroupedExactResultPayload {
+  return payload.result_scope === "grouped";
+}
+
+function formatStrategyLabel(strategy: string): string {
+  if (strategy === "adaptive_sampling") {
+    return "Adaptive sampling";
+  }
+  if (strategy === "stratified_sampling") {
+    return "Stratified sampling";
+  }
+  return strategy.replace(/_/g, " ");
 }
 
 function describeRuntimeComparison(exactResult: ExactResultPayload): {

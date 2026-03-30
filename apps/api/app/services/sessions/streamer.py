@@ -14,11 +14,15 @@ from app.schemas.events import (
 )
 from app.services.approx.adaptive_sampling import run_adaptive_sampling
 from app.services.approx.progress import (
-    build_exact_result_payload,
-    build_final_payload,
-    build_progress_payload,
+    build_grouped_exact_result_payload,
+    build_grouped_final_payload,
+    build_grouped_progress_payload,
+    build_scalar_exact_result_payload,
+    build_scalar_final_payload,
+    build_scalar_progress_payload,
 )
-from app.services.exact.duckdb_runner import run_exact_query
+from app.services.approx.stratified_sampling import run_stratified_sampling
+from app.services.exact.duckdb_runner import run_exact_query, run_tabular_query
 from app.services.sessions.manager import QuerySessionState
 
 
@@ -33,7 +37,7 @@ async def stream_session_events(session: QuerySessionState) -> AsyncIterator[str
         event_index += 1
         yield encoded_event
 
-    if not session.planner.approx_supported or session.adaptive_query is None:
+    if not session.planner.approx_supported or session.approx_query is None:
         await _sleep_before_event(event_index)
         yield encode_sse_event(
             _make_event(
@@ -51,15 +55,60 @@ async def stream_session_events(session: QuerySessionState) -> AsyncIterator[str
         return
 
     try:
-        sampling_result = run_adaptive_sampling(
-            dataset=session.dataset,
-            query=session.adaptive_query,
-            target_error=session.request.error_tolerance,
-            confidence_level=session.request.confidence_level,
-            seed_material=f"{session.session_id}:{session.adaptive_query.raw_sql}",
-        )
+        if session.planner.strategy == "stratified_sampling":
+            if session.group_populations is None:
+                raise ValueError("Grouped stratum populations are missing.")
+
+            sampling_result = run_stratified_sampling(
+                dataset=session.dataset,
+                query=session.approx_query,
+                group_populations=session.group_populations,
+                target_error=session.request.error_tolerance,
+                confidence_level=session.request.confidence_level,
+            )
+            progress_payloads = [
+                build_grouped_progress_payload(
+                    snapshot=snapshot,
+                    query=session.approx_query,
+                    dataset=session.dataset,
+                    confidence_level=session.request.confidence_level,
+                    target_error_pct=session.planner.target_error_pct,
+                )
+                for snapshot in sampling_result.snapshots
+            ]
+            final_payload = build_grouped_final_payload(
+                progress=progress_payloads[-1],
+                stopped_reason=sampling_result.stopped_reason,
+            )
+        else:
+            sampling_result = run_adaptive_sampling(
+                dataset=session.dataset,
+                query=session.approx_query,
+                target_error=session.request.error_tolerance,
+                confidence_level=session.request.confidence_level,
+                seed_material=f"{session.session_id}:{session.approx_query.raw_sql}",
+            )
+            progress_payloads = [
+                build_scalar_progress_payload(
+                    snapshot=snapshot,
+                    query=session.approx_query,
+                    dataset=session.dataset,
+                    confidence_level=session.request.confidence_level,
+                    target_error_pct=session.planner.target_error_pct,
+                )
+                for snapshot in sampling_result.snapshots
+            ]
+            final_payload = build_scalar_final_payload(
+                progress=progress_payloads[-1],
+                stopped_reason=sampling_result.stopped_reason,
+            )
     except Exception as exc:
         await _sleep_before_event(event_index)
+        strategy_name = (
+            "Stratified sampling"
+            if session.planner.strategy == "stratified_sampling"
+            else "Adaptive sampling"
+        )
         yield encode_sse_event(
             _make_event(
                 session_id=session.session_id,
@@ -67,27 +116,12 @@ async def stream_session_events(session: QuerySessionState) -> AsyncIterator[str
                 event_type="error",
                 payload=ErrorPayload(
                     code="approx_execution_failed",
-                    message=f"Adaptive sampling failed: {exc}",
+                    message=f"{strategy_name} failed: {exc}",
                     retryable=False,
                 ).model_dump(mode="json"),
             )
         )
         return
-
-    progress_payloads = [
-        build_progress_payload(
-            snapshot=snapshot,
-            query=session.adaptive_query,
-            dataset=session.dataset,
-            confidence_level=session.request.confidence_level,
-            target_error_pct=session.planner.target_error_pct,
-        )
-        for snapshot in sampling_result.snapshots
-    ]
-    final_payload = build_final_payload(
-        progress=progress_payloads[-1],
-        stopped_reason=sampling_result.stopped_reason,
-    )
 
     for progress_payload in progress_payloads[:-1]:
         await _sleep_before_event(event_index)
@@ -113,10 +147,29 @@ async def stream_session_events(session: QuerySessionState) -> AsyncIterator[str
     )
 
     try:
-        exact_result = run_exact_query(
-            dataset=session.dataset,
-            sql=session.adaptive_query.exact_sql(),
-        )
+        if session.approx_query.is_grouped:
+            exact_result = run_tabular_query(
+                dataset=session.dataset,
+                sql=session.approx_query.exact_sql(),
+            )
+            exact_payload = build_grouped_exact_result_payload(
+                exact_result=exact_result,
+                approx_final=final_payload,
+                query=session.approx_query,
+                dataset=session.dataset,
+            )
+        else:
+            exact_result = run_exact_query(
+                dataset=session.dataset,
+                sql=session.approx_query.exact_sql(),
+            )
+            exact_payload = build_scalar_exact_result_payload(
+                exact_value=exact_result.value,
+                exact_latency_ms=exact_result.latency_ms,
+                approx_final=final_payload,
+                query=session.approx_query,
+                dataset=session.dataset,
+            )
     except Exception as exc:
         await _sleep_before_event(event_index)
         yield encode_sse_event(
@@ -140,13 +193,7 @@ async def stream_session_events(session: QuerySessionState) -> AsyncIterator[str
             session_id=session.session_id,
             sequence=event_index,
             event_type="exact_result",
-            payload=build_exact_result_payload(
-                exact_value=exact_result.value,
-                exact_latency_ms=exact_result.latency_ms,
-                approx_final=final_payload,
-                query=session.adaptive_query,
-                dataset=session.dataset,
-            ).model_dump(mode="json"),
+            payload=exact_payload.model_dump(mode="json"),
         )
     )
 

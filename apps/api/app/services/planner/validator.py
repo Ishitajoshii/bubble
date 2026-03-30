@@ -24,6 +24,9 @@ def validate_adaptive_query(
     ):
         raise ValueError(f"{query.aggregate_function.upper()} requires a numeric column.")
 
+    if query.group_by_column is not None and query.group_by_column not in columns:
+        raise ValueError(f"Unknown GROUP BY column '{query.group_by_column}'.")
+
     for predicate in query.filters:
         if predicate.column not in columns:
             raise ValueError(f"Unknown filter column '{predicate.column}'.")
@@ -32,6 +35,15 @@ def validate_adaptive_query(
 
         if columns[predicate.column] == "TEXT" and predicate.operator not in {"=", "!="}:
             raise ValueError("Text filters only support '=' and '!=' operators.")
+
+    if query.order_by is not None:
+        allowed_order_columns = {query.alias}
+        if query.group_by_column is not None:
+            allowed_order_columns.add(query.group_by_column)
+        if query.order_by.column not in allowed_order_columns:
+            raise ValueError(
+                "ORDER BY for approximate queries must use either the aggregate alias or the GROUP BY column."
+            )
 
     return query
 

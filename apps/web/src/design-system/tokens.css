@@ -277,6 +277,43 @@ h2 {
   color: var(--muted);
 }
 
+.table-shell {
+  margin-top: 16px;
+  overflow-x: auto;
+  border: 1px solid rgba(216, 204, 182, 0.72);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 420px;
+}
+
+.result-table th,
+.result-table td {
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.result-table thead th {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid rgba(216, 204, 182, 0.72);
+}
+
+.result-table tbody tr + tr td {
+  border-top: 1px solid rgba(216, 204, 182, 0.56);
+}
+
+.result-table td {
+  font-variant-numeric: tabular-nums;
+}
+
 .graph {
   margin-top: 16px;
 }

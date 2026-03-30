@@ -117,6 +117,7 @@ export const mockTimedQuerySessionEvents: TimedMockQuerySessionEvent[] = [
     sent_at: "2026-03-30T12:10:02.010000Z",
     mockDelayMs: 420,
     payload: {
+      result_scope: "scalar",
       iteration: 1,
       estimate: 104200,
       display_value: "$104,200",
@@ -145,6 +146,7 @@ export const mockTimedQuerySessionEvents: TimedMockQuerySessionEvent[] = [
     sent_at: "2026-03-30T12:10:02.730000Z",
     mockDelayMs: 520,
     payload: {
+      result_scope: "scalar",
       iteration: 2,
       estimate: 118900,
       display_value: "$118,900",
@@ -173,6 +175,7 @@ export const mockTimedQuerySessionEvents: TimedMockQuerySessionEvent[] = [
     sent_at: "2026-03-30T12:10:03.460000Z",
     mockDelayMs: 620,
     payload: {
+      result_scope: "scalar",
       iteration: 3,
       estimate: 123950,
       display_value: "$123,950",
@@ -201,6 +204,7 @@ export const mockTimedQuerySessionEvents: TimedMockQuerySessionEvent[] = [
     sent_at: "2026-03-30T12:10:04.160000Z",
     mockDelayMs: 700,
     payload: {
+      result_scope: "scalar",
       iteration: 4,
       estimate: 124197,
       display_value: "$124,197",
@@ -229,6 +233,7 @@ export const mockTimedQuerySessionEvents: TimedMockQuerySessionEvent[] = [
     sent_at: "2026-03-30T12:10:04.420000Z",
     mockDelayMs: 240,
     payload: {
+      result_scope: "scalar",
       iteration: 4,
       estimate: 124197,
       display_value: "$124,197",
@@ -259,6 +264,7 @@ export const mockTimedQuerySessionEvents: TimedMockQuerySessionEvent[] = [
     sent_at: "2026-03-30T12:10:05.810000Z",
     mockDelayMs: 1400,
     payload: {
+      result_scope: "scalar",
       exact_value: 129104,
       display_value: "$129,104",
       exact_latency_ms: 11120,

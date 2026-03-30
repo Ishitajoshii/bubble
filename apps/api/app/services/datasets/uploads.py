@@ -524,8 +524,12 @@ def _build_column_specs(
 
 def _build_capabilities(schema_fields: list[DatasetField]) -> list[str]:
     capabilities = ["count"]
-    if any(field.type.upper() in _NUMERIC_TYPES for field in schema_fields):
+    has_numeric = any(field.type.upper() in _NUMERIC_TYPES for field in schema_fields)
+    has_dimension = any(field.type.upper() not in _NUMERIC_TYPES for field in schema_fields)
+    if has_numeric:
         capabilities.extend(["sum", "avg"])
+        if has_dimension:
+            capabilities.append("group_by")
     return capabilities
 
 
@@ -544,6 +548,13 @@ def _build_example_prompts(
         display_name = display_names.get(numeric_field.name, numeric_field.name)
         prompts.append(f"What is the total {display_name}?")
         prompts.append(f"What is the average {display_name}?")
+        group_field = next(
+            (field for field in schema_fields if field.type.upper() not in _NUMERIC_TYPES),
+            None,
+        )
+        if group_field is not None:
+            group_display_name = display_names.get(group_field.name, group_field.name)
+            prompts.append(f"What is the total {display_name} by {group_display_name}?")
 
     filter_field = next(
         (field for field in schema_fields if len(field.example_values) > 0),

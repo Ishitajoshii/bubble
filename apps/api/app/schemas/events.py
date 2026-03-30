@@ -20,6 +20,7 @@ QuerySessionEventType = Literal[
 ]
 ApproxProgressStatus = Literal["warming_up", "converging", "target_met"]
 ApproxFinalReason = Literal["target_reached", "sample_cap", "exact_fallback"]
+ApproxResultScope = Literal["scalar", "grouped"]
 
 
 class TranslationMetadata(BaseModel):
@@ -59,10 +60,18 @@ class PlanReadyPayload(BaseModel):
     planner: PlannerOutput
 
 
-class ApproxProgressPayload(BaseModel):
-    iteration: int
+class ApproxGroupEstimate(BaseModel):
+    group_value: str
     estimate: float
     display_value: str
+    relative_error: float
+    sample_rows: int
+    population_rows: int
+
+
+class ApproxPayloadBase(BaseModel):
+    result_scope: ApproxResultScope
+    iteration: int
     sample_fraction: float
     sample_rows: int
     data_scanned_pct: float
@@ -76,12 +85,37 @@ class ApproxProgressPayload(BaseModel):
     convergence_point: ConvergencePoint
 
 
-class ApproxFinalPayload(ApproxProgressPayload):
+class ScalarApproxProgressPayload(ApproxPayloadBase):
+    result_scope: Literal["scalar"] = "scalar"
+    estimate: float
+    display_value: str
+
+
+class GroupedApproxProgressPayload(ApproxPayloadBase):
+    result_scope: Literal["grouped"] = "grouped"
+    group_by_column: str
+    group_count: int
+    group_rows: list[ApproxGroupEstimate] = Field(default_factory=list)
+    summary_label: str
+    error_metric_label: str = "Max group relative error"
+
+
+class ScalarApproxFinalPayload(ScalarApproxProgressPayload):
     approx_latency_ms: int
     stopped_reason: ApproxFinalReason
 
 
-class ExactResultPayload(BaseModel):
+class GroupedApproxFinalPayload(GroupedApproxProgressPayload):
+    approx_latency_ms: int
+    stopped_reason: ApproxFinalReason
+
+
+ApproxProgressPayload = ScalarApproxProgressPayload | GroupedApproxProgressPayload
+ApproxFinalPayload = ScalarApproxFinalPayload | GroupedApproxFinalPayload
+
+
+class ScalarExactResultPayload(BaseModel):
+    result_scope: Literal["scalar"] = "scalar"
     exact_value: float
     display_value: str
     exact_latency_ms: int
@@ -89,6 +123,31 @@ class ExactResultPayload(BaseModel):
     delta: float
     delta_pct: float
     speedup: float
+
+
+class ExactGroupComparison(BaseModel):
+    group_value: str
+    approx_estimate: float
+    approx_display_value: str
+    exact_value: float
+    exact_display_value: str
+    delta: float
+    delta_pct: float
+
+
+class GroupedExactResultPayload(BaseModel):
+    result_scope: Literal["grouped"] = "grouped"
+    group_by_column: str
+    group_count: int
+    rows: list[ExactGroupComparison] = Field(default_factory=list)
+    max_delta_pct: float
+    mean_delta_pct: float
+    exact_latency_ms: int
+    approx_latency_ms: int
+    speedup: float
+
+
+ExactResultPayload = ScalarExactResultPayload | GroupedExactResultPayload
 
 
 class ErrorPayload(BaseModel):

@@ -74,6 +74,7 @@ def _build_schema_aware_fallback(
     aggregate = _choose_aggregate(prompt)
     filters = _extract_filters(prompt=prompt, dataset=dataset)
     numeric_field = _pick_numeric_field(prompt=prompt, dataset=dataset)
+    group_field = _pick_group_field(prompt=prompt, dataset=dataset)
     warnings: list[str] = []
 
     if aggregate in {"sum", "avg"} and numeric_field is None:
@@ -82,8 +83,9 @@ def _build_schema_aware_fallback(
         )
         aggregate = "count"
 
+    alias = "row_count"
     if aggregate == "count":
-        sql = f"SELECT COUNT(*) AS row_count FROM {dataset.dataset_id}"
+        aggregate_expression = "COUNT(*)"
     else:
         assert numeric_field is not None
         alias = (
@@ -91,13 +93,21 @@ def _build_schema_aware_fallback(
             if aggregate == "sum"
             else f"average_{numeric_field.name}"
         )
+        aggregate_expression = f"{aggregate.upper()}({numeric_field.name})"
+
+    if group_field is not None:
         sql = (
-            f"SELECT {aggregate.upper()}({numeric_field.name}) AS {alias} "
+            f"SELECT {group_field.name}, {aggregate_expression} AS {alias} "
             f"FROM {dataset.dataset_id}"
         )
+    else:
+        sql = f"SELECT {aggregate_expression} AS {alias} FROM {dataset.dataset_id}"
 
     if filters:
         sql += " WHERE " + " AND ".join(filters)
+
+    if group_field is not None:
+        sql += f" GROUP BY {group_field.name} ORDER BY {alias} DESC"
 
     sql += ";"
 
@@ -136,6 +146,39 @@ def _pick_numeric_field(prompt: str, dataset: DatasetSummary) -> DatasetField | 
         if score > best_score:
             best_score = score
             best_field = field
+
+    return best_field
+
+
+def _pick_group_field(prompt: str, dataset: DatasetSummary) -> DatasetField | None:
+    if " by " not in prompt:
+        return None
+
+    dimension_fields = [
+        field
+        for field in dataset.schema_fields
+        if field.type.upper() not in _NUMERIC_TYPES
+    ]
+    if len(dimension_fields) == 0:
+        return None
+
+    prompt_tokens = _tokenize(prompt)
+    by_fragment = prompt.rsplit(" by ", 1)[-1]
+    by_tokens = _tokenize(by_fragment)
+    best_field = dimension_fields[0]
+    best_score = -1
+
+    for field in dimension_fields:
+        field_tokens = _tokenize(
+            " ".join([field.name, field.description, *field.example_values])
+        )
+        score = len(by_tokens & field_tokens) * 3 + len(prompt_tokens & field_tokens)
+        if score > best_score:
+            best_score = score
+            best_field = field
+
+    if best_score <= 0:
+        return None
 
     return best_field
 

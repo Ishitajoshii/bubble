@@ -59,9 +59,10 @@ def _register_builtin_datasets() -> None:
             label="Orders",
             description="E-commerce order facts for aggregate and group-by benchmarks.",
             row_count=DATASET_ROW_COUNTS["orders_v1"],
-            capabilities=["count", "sum", "avg"],
+            capabilities=["count", "sum", "avg", "group_by"],
             example_prompts=[
                 "What is total revenue?",
+                "What is revenue by region?",
                 "How many delivered orders do we have?",
                 "What is the average order value?",
                 "How many unique customers placed orders?",
@@ -110,10 +111,11 @@ def _register_builtin_datasets() -> None:
             label="Shipments",
             description="Shipment delivery facts for late-delivery and delay metrics.",
             row_count=DATASET_ROW_COUNTS["shipments_v1"],
-            capabilities=["count", "avg"],
+            capabilities=["count", "avg", "group_by"],
             example_prompts=[
                 "How many late shipments are there?",
                 "What is the average delivery delay?",
+                "What is the average delivery delay by carrier?",
             ],
             schema=[
                 DatasetField(
