@@ -2,3 +2,8 @@ data/generated/
 data/raw/
 data/manifests/
 .env
+**/__pycache__/
+apps/api/.venv/
+apps/api/*.log
+apps/web/node_modules/
+apps/web/dist/
