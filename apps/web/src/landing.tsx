@@ -222,7 +222,7 @@ function Sidebar({
               background: "rgba(255,255,255,0.04)",
               border: "none",
               borderRadius: 10,
-              color: "#c8b8d4",
+              color: "#ffffff",
               cursor: "pointer",
               fontSize: 14,
               fontWeight: 500,
@@ -236,7 +236,7 @@ function Sidebar({
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-              e.currentTarget.style.color = "#c8b8d4";
+              e.currentTarget.style.color = "#ffffff";
             }}
           >
             {icon}

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import "./App.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SVG Assets
@@ -287,7 +288,7 @@ function ConvergenceGraph({
             width="56" height="18" rx="5"
             fill="rgba(30,22,35,0.9)" stroke="rgba(162,227,246,0.5)" strokeWidth="0.8"
           />
-          <text x={toX(last.x) + 6} y={toY(last.y) - 14} fill="#e0d0e8" fontSize="10" textAnchor="middle">
+          <text x={toX(last.x) + 6} y={toY(last.y) - 14} fill="#ffffff" fontSize="10" textAnchor="middle">
             {last.x}, {last.y.toFixed(1)}
           </text>
         </g>
@@ -351,7 +352,7 @@ function PlusMenu({ onClose }: { onClose: () => void }) {
           display: "flex", alignItems: "center", gap: 10,
           width: "100%", padding: "9px 14px",
           background: "transparent", border: "none", cursor: "pointer",
-          color: "#e0d0e8", textAlign: "left", transition: "background 0.15s",
+          color: "#ffffff", textAlign: "left", transition: "background 0.15s",
           fontFamily: "'DM Sans', sans-serif",
         }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(251,144,176,0.1)")}
@@ -406,7 +407,7 @@ function InputBar({
           placeholder={placeholder} disabled={disabled}
           style={{
             flex: 1, background: "transparent", border: "none", outline: "none",
-            color: "#e0d0e8", fontSize: 14, fontFamily: "'DM Sans', sans-serif",
+            color: "#ffffff", fontSize: 14, fontFamily: "'DM Sans', sans-serif",
             caretColor: "#FB90B0", opacity: disabled ? 0.5 : 1,
           }}
         />
@@ -444,10 +445,10 @@ function Sidebar({ onNew, onHistory }: { onNew: () => void; onHistory: (p: strin
   return (
     <aside style={{
       width: 238, minWidth: 238,
-      background: "#1a1320",
+      background: "#222222",
       borderRight: "1px solid rgba(255,255,255,0.06)",
       display: "flex", flexDirection: "column",
-      padding: "20px 0", zIndex: 10, overflowY: "auto",
+      padding: "30px 0 0 0", zIndex: 10, overflowY: "auto",
     }}>
       <div style={{ padding: "0 20px 24px" }}>
         <span style={{
@@ -466,12 +467,12 @@ function Sidebar({ onNew, onHistory }: { onNew: () => void; onHistory: (p: strin
           <button key={label} onClick={action} style={{
             display: "flex", alignItems: "center", gap: 10,
             padding: "9px 12px", background: "rgba(255,255,255,0.04)",
-            border: "none", borderRadius: 9, color: "#c8b8d4",
+            border: "none", borderRadius: 9, color: "#ffffff",
             cursor: "pointer", fontSize: 13, fontWeight: 500,
             fontFamily: "'DM Sans', sans-serif", transition: "all 0.15s", textAlign: "left",
           }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(251,144,176,0.12)"; e.currentTarget.style.color = "#FB90B0"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "#c8b8d4"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "#ffffff"; }}
           >
             {icon}{label}
           </button>
@@ -487,7 +488,7 @@ function Sidebar({ onNew, onHistory }: { onNew: () => void; onHistory: (p: strin
             fontSize: 12, lineHeight: 1.45, transition: "color 0.15s",
             fontFamily: "'DM Sans', sans-serif", marginBottom: 2,
           }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#c8b8d4")}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "#7a6a85")}
           >
             {h}
@@ -516,84 +517,86 @@ function StatusPanel({
   return (
     <aside style={{
       width: 240, minWidth: 240,
-      background: "#1a1320",
+      background: "#222222",
       borderLeft: "1px solid rgba(255,255,255,0.06)",
       display: "flex", flexDirection: "column",
-      padding: "20px 16px", overflowY: "auto",
+      padding: "20px 16px", overflowY: "auto", alignItems: "center",
     }}>
-      <h3 style={{
-        fontSize: 16, fontWeight: 700, color: "#FB90B0",
-        marginBottom: 16, textDecoration: "underline",
-        fontFamily: "'DM Sans', sans-serif",
-      }}>Status</h3>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+        <h3 style={{
+          fontSize: 16, fontWeight: 700, color: "#FB90B0",
+          marginBottom: 16, textDecoration: "underline",
+          fontFamily: "'DM Sans', sans-serif",
+        }}>Status</h3>
 
-      {/* Bubble avatar */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-        <div style={{ animation: "floatBubble 5s ease-in-out infinite" }}>
-          <BubbleSmall size={72} />
-        </div>
-      </div>
-
-      {/* Status label */}
-      <p style={{
-        textAlign: "center", fontSize: 13, fontWeight: 600,
-        color: "#FB90B0", marginBottom: 14,
-        fontFamily: "'DM Sans', sans-serif",
-      }}>
-        {statusLabel}
-      </p>
-
-      {/* Pipeline step dots */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginBottom: 20 }}>
-        {dotStates.map((s, i) => (
-          <div key={s.id} style={{ display: "flex", alignItems: "center" }}>
-            <div style={{
-              width: 14, height: 14, borderRadius: "50%",
-              border: `2px solid ${s.status === "idle" ? "rgba(162,227,246,0.4)" : "#A2E3F6"}`,
-              background: s.status === "done" ? "#A2E3F6" : s.status === "active" ? "rgba(162,227,246,0.5)" : "transparent",
-              transition: "all 0.3s",
-              boxShadow: s.status !== "idle" ? "0 0 6px rgba(162,227,246,0.5)" : "none",
-            }} />
-            {i < dotStates.length - 1 && (
-              <div style={{
-                width: 28, height: 1.5,
-                background: s.status === "done" ? "#A2E3F6" : "rgba(162,227,246,0.2)",
-                borderTop: `1.5px dashed ${s.status === "done" ? "rgba(162,227,246,0.7)" : "rgba(162,227,246,0.25)"}`,
-                margin: "0 1px",
-              }} />
-            )}
+        {/* Bubble avatar */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+          <div style={{ animation: "floatBubble 5s ease-in-out infinite" }}>
+            <BubbleSmall size={72} />
           </div>
-        ))}
-      </div>
-
-      {/* Result panels */}
-      {result && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <ResultBlock title="Targets Met">
-            <MetricRow label="Target Error" value={`${result.targetError}%`} />
-            <MetricRow label="Confidence" value={`${result.confidence}%`} />
-            <MetricRow label="Status" value={result.targetMet ? "Achieved" : "Not Met"} highlight={result.targetMet} />
-          </ResultBlock>
-
-          <ResultBlock title="Approximate Result">
-            <MetricRow label="Estimate" value={result.estimate} />
-            <MetricRow label="Relative Error" value={`${result.relativeError}%`} />
-            <MetricRow label="Elapsed" value={`${result.elapsed}s`} />
-          </ResultBlock>
-
-          <ResultBlock title="Scanned vs Saved">
-            <MetricRow label="Data Scanned" value={`${result.dataScanned}%`} />
-            <MetricRow label="Compute Saved" value={`${result.computeSaved}%`} />
-            <MetricRow label="Sample Rows" value={result.sampleRows.toLocaleString()} />
-          </ResultBlock>
-
-          <ResultBlock title="Exact Result">
-            <MetricRow label="Exact Value" value={result.exactValue} />
-            <MetricRow label="Delta" value={`${result.delta} · ${result.deltaPct}%`} />
-            <MetricRow label="Speedup" value={`${result.speedup}x`} />
-          </ResultBlock>
         </div>
-      )}
+
+        {/* Status label */}
+        <p style={{
+          textAlign: "center", fontSize: 13, fontWeight: 600,
+          color: "#FB90B0", marginBottom: 14,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          {statusLabel}
+        </p>
+
+        {/* Pipeline step dots */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginBottom: 20 }}>
+          {dotStates.map((s, i) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center" }}>
+              <div style={{
+                width: 14, height: 14, borderRadius: "50%",
+                border: `2px solid ${s.status === "idle" ? "rgba(162,227,246,0.4)" : "#A2E3F6"}`,
+                background: s.status === "done" ? "#A2E3F6" : s.status === "active" ? "rgba(162,227,246,0.5)" : "transparent",
+                transition: "all 0.3s",
+                boxShadow: s.status !== "idle" ? "0 0 6px rgba(162,227,246,0.5)" : "none",
+              }} />
+              {i < dotStates.length - 1 && (
+                <div style={{
+                  width: 28, height: 1.5,
+                  background: s.status === "done" ? "#A2E3F6" : "rgba(162,227,246,0.2)",
+                  borderTop: `1.5px dashed ${s.status === "done" ? "rgba(162,227,246,0.7)" : "rgba(162,227,246,0.25)"}`,
+                  margin: "0 1px",
+                }} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Result panels */}
+        {result && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
+            <ResultBlock title="Targets Met">
+              <MetricRow label="Target Error" value={`${result.targetError}%`} />
+              <MetricRow label="Confidence" value={`${result.confidence}%`} />
+              <MetricRow label="Status" value={result.targetMet ? "Achieved" : "Not Met"} highlight={result.targetMet} />
+            </ResultBlock>
+
+            <ResultBlock title="Approximate Result">
+              <MetricRow label="Estimate" value={result.estimate} />
+              <MetricRow label="Relative Error" value={`${result.relativeError}%`} />
+              <MetricRow label="Elapsed" value={`${result.elapsed}s`} />
+            </ResultBlock>
+
+            <ResultBlock title="Scanned vs Saved">
+              <MetricRow label="Data Scanned" value={`${result.dataScanned}%`} />
+              <MetricRow label="Compute Saved" value={`${result.computeSaved}%`} />
+              <MetricRow label="Sample Rows" value={result.sampleRows.toLocaleString()} />
+            </ResultBlock>
+
+            <ResultBlock title="Exact Result">
+              <MetricRow label="Exact Value" value={result.exactValue} />
+              <MetricRow label="Delta" value={`${result.delta} · ${result.deltaPct}%`} />
+              <MetricRow label="Speedup" value={`${result.speedup}x`} />
+            </ResultBlock>
+          </div>
+        )}
+      </div>
     </aside>
   );
 }
@@ -601,7 +604,7 @@ function StatusPanel({
 function ResultBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p style={{ fontSize: 12, fontWeight: 700, color: "#e0d0e8", marginBottom: 6, fontFamily: "'DM Sans', sans-serif" }}>
+      <p style={{ fontSize: 12, fontWeight: 700, color: "#ffffff", marginBottom: 6, fontFamily: "'DM Sans', sans-serif" }}>
         {title}
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{children}</div>
@@ -613,7 +616,7 @@ function MetricRow({ label, value, highlight = false }: { label: string; value: 
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
       <span style={{ fontSize: 11, color: "#7a6a85", fontFamily: "'DM Sans', sans-serif" }}>{label}:</span>
-      <span style={{ fontSize: 11, color: highlight ? "#A2E3F6" : "#c8b8d4", fontWeight: 500, fontFamily: "'DM Sans', sans-serif", textAlign: "right" }}>
+      <span style={{ fontSize: 11, color: highlight ? "#A2E3F6" : "#ffffff", fontWeight: 500, fontFamily: "'DM Sans', sans-serif", textAlign: "right" }}>
         {value}
       </span>
     </div>
@@ -644,7 +647,7 @@ function ErrorSlider({ value, onChange, onClose }: { value: number; onChange: (v
       boxShadow: "0 8px 28px rgba(0,0,0,0.55)", zIndex: 200,
       animation: "menuIn 0.18s cubic-bezier(.22,1,.36,1)",
     }}>
-      <p style={{ fontSize: 13, fontWeight: 600, color: "#e0d0e8", textAlign: "center", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
+      <p style={{ fontSize: 13, fontWeight: 600, color: "#ffffff", textAlign: "center", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
         Choose Error Percentage
       </p>
       <p style={{ fontSize: 18, fontWeight: 700, color: "#FB90B0", textAlign: "center", marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>
@@ -698,7 +701,7 @@ function LandingView({
         <BubbleSmile size={120} />
       </div>
 
-      <p style={{ color: "#c8b8d4", fontSize: 16, fontWeight: 500, marginBottom: 28, textAlign: "center", zIndex: 1, fontFamily: "'DM Sans', sans-serif" }}>
+      <p style={{ color: "#ffffff", fontSize: 16, fontWeight: 500, marginBottom: 28, textAlign: "center", zIndex: 1, fontFamily: "'DM Sans', sans-serif" }}>
         Hello User, What do you wanna know today?
       </p>
 
@@ -750,7 +753,7 @@ function ResultView({
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ flex: 1, overflowY: "auto", padding: "24px 32px 8px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "80px 32px 8px" }}>
         <div style={{
           border: "1.5px solid rgba(251,144,176,0.4)",
           borderRadius: 16, padding: "20px 22px",
@@ -760,7 +763,7 @@ function ResultView({
           {/* SQL */}
           {(result || streaming) && (
             <div style={{ marginBottom: 18 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#e0d0e8", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
                 Generated SQL Query
               </p>
               <div style={{
@@ -776,7 +779,7 @@ function ResultView({
           {/* Planner rationale */}
           {result && (
             <div style={{ marginBottom: 18 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#e0d0e8", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
                 Planner Rationale
               </p>
               <div style={{
@@ -788,7 +791,7 @@ function ResultView({
                   ["Reason", result.strategyReason],
                   ["Target", result.target],
                 ].map(([k, v]) => (
-                  <p key={k} style={{ fontSize: 12, color: "#c8b8d4", fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
+                  <p key={k} style={{ fontSize: 12, color: "#ffffff", fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
                     <span style={{ fontWeight: 600 }}>{k}:</span> {v}
                   </p>
                 ))}
@@ -914,7 +917,7 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'DM Sans', sans-serif; background: #1a1320; color: #e0d0e8; height: 100vh; overflow: hidden; }
+        body { font-family: 'Alrich', sans-serif; background: #222222; color: #ffffff; height: 100vh; overflow: hidden; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(251,144,176,0.3); border-radius: 2px; }
@@ -930,7 +933,7 @@ export default function App() {
 
       <div style={{
         display: "flex", height: "100vh",
-        background: "linear-gradient(135deg, #1a1320 0%, #1e1428 50%, #1a1320 100%)",
+        background: "#222222",
         position: "relative",
       }}>
         <Sidebar onNew={handleNew} onHistory={(p) => handleSubmit(p)} />
@@ -949,7 +952,7 @@ export default function App() {
                 cursor: "pointer", fontSize: 13, fontWeight: 600,
                 fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s",
               }}
-                onMouseEnter={(e) => { if (mode !== m) { e.currentTarget.style.borderColor = "rgba(251,144,176,0.45)"; e.currentTarget.style.color = "#e0d0e8"; } }}
+                onMouseEnter={(e) => { if (mode !== m) { e.currentTarget.style.borderColor = "rgba(251,144,176,0.45)"; e.currentTarget.style.color = "#ffffff"; } }}
                 onMouseLeave={(e) => { if (mode !== m) { e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)"; e.currentTarget.style.color = "#9a8aaa"; } }}
               >
                 {m}
