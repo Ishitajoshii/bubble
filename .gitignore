@@ -1,1 +1,4 @@
 data/generated/
+data/raw/
+data/manifests/
+.env
