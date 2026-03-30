@@ -61,7 +61,7 @@ interface HoveredState {
 // ─────────────────────────────────────────────────────────────────────────────
 const TARGET_ERROR = 5;
 const W = 640;
-const H = 300;
+const H = 340;
 const PAD = { top: 32, right: 36, bottom: 52, left: 56 } as const;
 const MAX_ERR = 60;
 const LERP_SPEED = 0.072; // fraction per frame — controls smoothness
@@ -503,9 +503,7 @@ function Btn({ children, primary, onClick }: BtnProps) {
 // ─────────────────────────────────────────────────────────────────────────────
 const S: Record<string, React.CSSProperties> = {
   page: {
-    position: "relative", minHeight: "100vh",
-    background: C.bg, overflow: "hidden",
-    display: "flex", alignItems: "center", justifyContent: "center",
+    position: "relative", width: "100%", height: "100%",
   },
   orb1: {
     position: "absolute", top: "-18%", left: "-12%",
@@ -521,9 +519,7 @@ const S: Record<string, React.CSSProperties> = {
   },
   wrapper: {
     position: "relative", zIndex: 1,
-    width: "100%", maxWidth: 820,
-    display: "flex", flexDirection: "column", gap: 18,
-    padding: "36px 28px",
+    width: "100%",
     fontFamily: "'DM Mono', monospace",
   },
   header: {

@@ -685,7 +685,7 @@ function ResultView({
 
           {/* Convergence graph */}
           {(convergencePoints.length > 0 || result) && (
-            <div>
+            <div style={{ width: "100%" }}>
               <ConvergenceGraph />
             </div>
           )}
