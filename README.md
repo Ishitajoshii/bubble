@@ -83,7 +83,6 @@ Backend URLs:
 
 ```cmd
 cd /d D:\ishi\bubble\apps\web
-set VITE_QUERY_SOURCE=sse
 set VITE_API_BASE_URL=http://127.0.0.1:8000
 corepack pnpm dev
 ```
@@ -92,7 +91,7 @@ Frontend URL:
 
 - App: `http://127.0.0.1:5173`
 
-`VITE_QUERY_SOURCE=sse` is required for the live backend flow, including dataset upload from the `+` button in the UI.
+Live `sse` mode is the default frontend behavior. The `+` upload button works in this mode.
 
 ## Run Frontend Only In Mock Mode
 

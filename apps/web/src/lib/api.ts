@@ -29,6 +29,7 @@ export interface StartSessionOptions {
 export interface QuerySessionClient {
   source: QuerySource;
   listDatasets: () => Promise<DatasetSummary[]>;
+  uploadDataset: (file: File) => Promise<DatasetSummary[]>;
   startSession: (
     request: CreateQuerySessionRequest,
     options: StartSessionOptions,
@@ -39,7 +40,7 @@ const DEFAULT_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ??
   "http://127.0.0.1:8000") as string;
 
 export function resolveQuerySource(): QuerySource {
-  return import.meta.env.VITE_QUERY_SOURCE === "sse" ? "sse" : "mock";
+  return import.meta.env.VITE_QUERY_SOURCE === "mock" ? "mock" : "sse";
 }
 
 export function createQuerySessionClient(
@@ -55,6 +56,9 @@ function createMockQuerySessionClient(): QuerySessionClient {
     source: "mock",
     async listDatasets() {
       return [mockQueryDataset];
+    },
+    async uploadDataset() {
+      throw new Error("Dataset uploads require the live SSE API source.");
     },
     async startSession(request, options) {
       let stopped = false;
@@ -106,6 +110,34 @@ function createSseQuerySessionClient(apiBaseUrl: string): QuerySessionClient {
       const response = await fetch(`${normalizedBaseUrl}/api/datasets`);
       if (!response.ok) {
         throw new Error(`Failed to load datasets (${response.status}).`);
+      }
+
+      const payload = (await response.json()) as DatasetListResponse;
+      return payload.items;
+    },
+    async uploadDataset(file) {
+      const response = await fetch(`${normalizedBaseUrl}/api/datasets/upload`, {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+          "X-File-Name": encodeURIComponent(file.name),
+        },
+        body: file,
+      });
+
+      if (!response.ok) {
+        let message = `Failed to upload dataset (${response.status}).`;
+
+        try {
+          const payload = (await response.json()) as { detail?: string };
+          if (payload.detail) {
+            message = payload.detail;
+          }
+        } catch {
+          // Ignore non-JSON error bodies and keep the default message.
+        }
+
+        throw new Error(message);
       }
 
       const payload = (await response.json()) as DatasetListResponse;

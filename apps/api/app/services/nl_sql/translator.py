@@ -38,7 +38,7 @@ class QueryTranslator:
                 ),
             )
 
-        fallback_result = build_fallback_sql(prompt=prompt, dataset_id=dataset.dataset_id)
+        fallback_result = build_fallback_sql(prompt=prompt, dataset=dataset)
         latency_ms = max(1, int((perf_counter() - started_at) * 1000))
         return TranslationResult(
             sql=fallback_result.sql,

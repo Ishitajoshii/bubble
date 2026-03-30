@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 
 import {
   createQuerySessionClient,
@@ -23,6 +29,7 @@ const queryClient = createQuerySessionClient();
 
 export default function App() {
   const activeRunRef = useRef<QuerySessionRun | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [datasetId, setDatasetId] = useState(
@@ -38,8 +45,10 @@ export default function App() {
   const [events, setEvents] = useState<AnyQuerySessionEvent[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState(true);
+  const [isUploadingDataset, setIsUploadingDataset] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [uiError, setUiError] = useState<string | null>(null);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -142,6 +151,55 @@ export default function App() {
     }
   }
 
+  async function handleDatasetUpload(file: File) {
+    setUiError(null);
+    setUploadMessage(null);
+    setIsUploadingDataset(true);
+
+    try {
+      const importedDatasets = await queryClient.uploadDataset(file);
+      if (importedDatasets.length === 0) {
+        throw new Error("The uploaded file did not produce any queryable datasets.");
+      }
+
+      setDatasets((current) => mergeDatasets(current, importedDatasets));
+      setDatasetId(importedDatasets[0].dataset_id);
+      setUploadMessage(
+        importedDatasets.length === 1
+          ? `Imported ${file.name}.`
+          : `Imported ${importedDatasets.length} tables from ${file.name}.`,
+      );
+    } catch (error) {
+      setUiError(
+        error instanceof Error ? error.message : "Failed to upload dataset.",
+      );
+    } finally {
+      setIsUploadingDataset(false);
+    }
+  }
+
+  function handleUploadButtonClick() {
+    if (queryClient.source !== "sse") {
+      setUiError(
+        "Dataset uploads are disabled in mock mode. Restart the web app with VITE_QUERY_SOURCE=sse.",
+      );
+      return;
+    }
+
+    fileInputRef.current?.click();
+  }
+
+  function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    void handleDatasetUpload(file);
+  }
+
   return (
     <div className="shell">
       <div className="shell__header">
@@ -173,17 +231,54 @@ export default function App() {
 
         <label className="field">
           <span>Dataset</span>
-          <select
-            value={datasetId}
-            disabled={isLoadingDatasets}
-            onChange={(changeEvent) => setDatasetId(changeEvent.target.value)}
-          >
-            {datasets.map((dataset) => (
-              <option key={dataset.dataset_id} value={dataset.dataset_id}>
-                {dataset.label}
-              </option>
-            ))}
-          </select>
+          <div className="dataset-picker">
+            <select
+              value={datasetId}
+              disabled={isLoadingDatasets || isUploadingDataset}
+              onChange={(changeEvent) => setDatasetId(changeEvent.target.value)}
+            >
+              {datasets.map((dataset) => (
+                <option key={dataset.dataset_id} value={dataset.dataset_id}>
+                  {dataset.label}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Upload dataset"
+              title="Upload CSV, TSV, JSON, XML, or SQLite"
+              disabled={isUploadingDataset}
+              onClick={handleUploadButtonClick}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 5v14M5 12h14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="2"
+                />
+              </svg>
+            </button>
+
+            <input
+              ref={fileInputRef}
+              hidden
+              type="file"
+              accept=".csv,.tsv,.json,.xml,.sqlite,.sqlite3,.db"
+              onChange={handleFileInputChange}
+            />
+          </div>
+          <span className="subtle">
+            {isUploadingDataset
+              ? "Importing file into the query pipeline..."
+              : queryClient.source === "sse"
+                ? "Upload .csv, .tsv, .json, .xml, or .sqlite files."
+                : "Mock mode is active. Restart with `VITE_QUERY_SOURCE=sse` to enable uploads."}
+          </span>
+          {uploadMessage ? <span className="subtle">{uploadMessage}</span> : null}
         </label>
 
         <label className="field">
@@ -219,7 +314,7 @@ export default function App() {
             {isStreaming ? "Streaming..." : "Run query"}
           </button>
           <span className="subtle">
-            Source-agnostic client. Toggle with `VITE_QUERY_SOURCE=mock|sse`.
+            Live API mode is the default. Set `VITE_QUERY_SOURCE=mock` only if you want the mock UI.
           </span>
         </div>
       </form>
@@ -567,4 +662,17 @@ function withFinalSnapshot(
   }
 
   return [...progressEvents, finalEvent];
+}
+
+function mergeDatasets(
+  current: DatasetSummary[],
+  incoming: DatasetSummary[],
+): DatasetSummary[] {
+  const merged = new Map(current.map((dataset) => [dataset.dataset_id, dataset]));
+
+  for (const dataset of incoming) {
+    merged.set(dataset.dataset_id, dataset);
+  }
+
+  return [...merged.values()];
 }

@@ -161,6 +161,37 @@ h2 {
   min-height: 92px;
 }
 
+.dataset-picker {
+  display: flex;
+  gap: 12px;
+}
+
+.dataset-picker select {
+  flex: 1;
+}
+
+.icon-button {
+  width: 48px;
+  min-width: 48px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-alt);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .form-actions {
   grid-column: 1 / -1;
   display: flex;
