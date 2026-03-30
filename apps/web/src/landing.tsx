@@ -155,7 +155,7 @@ function PlusMenu({ onClose }: { onClose: () => void }) {
             color: "#e0d0e8",
             textAlign: "left",
             transition: "background 0.15s",
-            fontFamily: "'BD Caramel', sans-serif",
+            fontFamily: "'Aldrich'",
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(251,144,176,0.1)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -193,7 +193,7 @@ function Sidebar({
       <div style={{ padding: "0 20px 28px" }}>
         <span
           style={{
-            fontFamily: "'Aldrich', sans-serif",
+            fontFamily: "'Aldrich'",
             fontSize: 26,
             color: "#FB90B0",
             letterSpacing: 1,
@@ -226,7 +226,7 @@ function Sidebar({
               cursor: "pointer",
               fontSize: 14,
               fontWeight: 500,
-              fontFamily: "'BD Caramel', sans-serif",
+              fontFamily: "'Aldrich'",
               transition: "all 0.15s",
               textAlign: "left",
             }}
@@ -301,7 +301,7 @@ function InputBar({
             cursor: "pointer",
             flexShrink: 0,
             transition: "all 0.15s",
-            fontFamily: "'BD Caramel', sans-serif",
+            fontFamily: "'Aldrich'",
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(251,144,176,0.2)")}
           onMouseLeave={(e) =>
@@ -347,7 +347,7 @@ function InputBar({
               cursor: "pointer",
               flexShrink: 0,
               transition: "all 0.15s",
-              fontFamily: "'BD Caramel', sans-serif",
+              fontFamily: "'Aldrich'",
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "#FB90B0")}
             onMouseLeave={(e) => (e.currentTarget.style.background = "#FB90B0")}
@@ -738,7 +738,7 @@ mention strategies like stratified sampling or HyperLogLog when relevant, and be
                   cursor: "pointer",
                   fontSize: 13,
                   fontWeight: 600,
-                  fontFamily: "'BD Caramel', sans-serif",
+                  fontFamily: "'Aldrich'",
                   letterSpacing: 0.3,
                   transition: "all 0.2s",
                 }}

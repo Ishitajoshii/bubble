@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import "./App.css";
 import ConvergenceGraph from "./features/convergence-graph";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -236,7 +237,7 @@ function PlusMenu({ onClose }: { onClose: () => void }) {
           width: "100%", padding: "9px 14px",
           background: "transparent", border: "none", cursor: "pointer",
           color: "#ffffff", textAlign: "left", transition: "background 0.15s",
-          fontFamily: "'DM Sans', sans-serif",
+          fontFamily: "'Aldrich'",
         }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(251,144,176,0.1)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -290,7 +291,7 @@ function InputBar({
           placeholder={placeholder} disabled={disabled}
           style={{
             flex: 1, background: "transparent", border: "none", outline: "none",
-            color: "#ffffff", fontSize: 14, fontFamily: "'DM Sans', sans-serif",
+            color: "#ffffff", fontSize: 14, fontFamily: "'Aldrich'",
             caretColor: "#FB90B0", opacity: disabled ? 0.5 : 1,
           }}
         />
@@ -335,9 +336,9 @@ function Sidebar({ onNew, onHistory }: { onNew: () => void; onHistory: (p: strin
     }}>
       <div style={{ padding: "0 20px 24px" }}>
         <span style={{
-          fontSize: 26, color: "#FB90B0", letterSpacing: 1, fontWeight: 700,
-          textShadow: "0 0 18px rgba(251,144,176,0.4)",
-          fontFamily: "'DM Sans', sans-serif",
+          fontSize: 26, color: "#FB90B0", letterSpacing: 1, fontWeight: 200,
+          fontFamily: "'BD_Caramel'",
+          WebkitTextStroke: "0px",
         }}>Bubble</span>
       </div>
 
@@ -352,7 +353,7 @@ function Sidebar({ onNew, onHistory }: { onNew: () => void; onHistory: (p: strin
             padding: "9px 12px", background: "rgba(255,255,255,0.04)",
             border: "none", borderRadius: 9, color: "#ffffff",
             cursor: "pointer", fontSize: 13, fontWeight: 500,
-            fontFamily: "'DM Sans', sans-serif", transition: "all 0.15s", textAlign: "left",
+            fontFamily: "'Aldrich'", transition: "all 0.15s", textAlign: "left",
           }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(251,144,176,0.12)"; e.currentTarget.style.color = "#FB90B0"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "#ffffff"; }}
@@ -369,7 +370,7 @@ function Sidebar({ onNew, onHistory }: { onNew: () => void; onHistory: (p: strin
             padding: "7px 12px", background: "transparent",
             border: "none", cursor: "pointer", color: "#7a6a85",
             fontSize: 12, lineHeight: 1.45, transition: "color 0.15s",
-            fontFamily: "'DM Sans', sans-serif", marginBottom: 2,
+            fontFamily: "'Aldrich'", marginBottom: 2,
           }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "#7a6a85")}
@@ -409,7 +410,7 @@ function StatusPanel({
         <h3 style={{
           fontSize: 16, fontWeight: 700, color: "#FB90B0",
           marginBottom: 16, textDecoration: "underline",
-          fontFamily: "'DM Sans', sans-serif",
+          fontFamily: "'Aldrich'",
         }}>Status</h3>
 
         {/* Bubble avatar */}
@@ -423,7 +424,7 @@ function StatusPanel({
         <p style={{
           textAlign: "center", fontSize: 13, fontWeight: 600,
           color: "#FB90B0", marginBottom: 14,
-          fontFamily: "'DM Sans', sans-serif",
+          fontFamily: "'Aldrich'",
         }}>
           {statusLabel}
         </p>
@@ -487,7 +488,7 @@ function StatusPanel({
 function ResultBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p style={{ fontSize: 12, fontWeight: 700, color: "#ffffff", marginBottom: 6, fontFamily: "'DM Sans', sans-serif" }}>
+      <p style={{ fontSize: 12, fontWeight: 700, color: "#ffffff", marginBottom: 6, fontFamily: "'Aldrich'" }}>
         {title}
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{children}</div>
@@ -498,8 +499,8 @@ function ResultBlock({ title, children }: { title: string; children: React.React
 function MetricRow({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
-      <span style={{ fontSize: 11, color: "#7a6a85", fontFamily: "'DM Sans', sans-serif" }}>{label}:</span>
-      <span style={{ fontSize: 11, color: highlight ? "#A2E3F6" : "#ffffff", fontWeight: 500, fontFamily: "'DM Sans', sans-serif", textAlign: "right" }}>
+      <span style={{ fontSize: 11, color: "#7a6a85", fontFamily: "'Aldrich'" }}>{label}:</span>
+      <span style={{ fontSize: 11, color: highlight ? "#A2E3F6" : "#ffffff", fontWeight: 500, fontFamily: "'Aldrich'", textAlign: "right" }}>
         {value}
       </span>
     </div>
@@ -530,10 +531,10 @@ function ErrorSlider({ value, onChange, onClose }: { value: number; onChange: (v
       boxShadow: "0 8px 28px rgba(0,0,0,0.55)", zIndex: 200,
       animation: "menuIn 0.18s cubic-bezier(.22,1,.36,1)",
     }}>
-      <p style={{ fontSize: 13, fontWeight: 600, color: "#ffffff", textAlign: "center", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
+      <p style={{ fontSize: 13, fontWeight: 600, color: "#ffffff", textAlign: "center", marginBottom: 8, fontFamily: "'Aldrich'" }}>
         Choose Error Percentage
       </p>
-      <p style={{ fontSize: 18, fontWeight: 700, color: "#FB90B0", textAlign: "center", marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>
+      <p style={{ fontSize: 18, fontWeight: 700, color: "#FB90B0", textAlign: "center", marginBottom: 10, fontFamily: "'Aldrich'" }}>
         {Math.round(value * 100)}%
       </p>
       <input
@@ -584,7 +585,7 @@ function LandingView({
         <BubbleSmile size={120} />
       </div>
 
-      <p style={{ color: "#ffffff", fontSize: 16, fontWeight: 500, marginBottom: 28, textAlign: "center", zIndex: 1, fontFamily: "'DM Sans', sans-serif" }}>
+      <p style={{ color: "#ffffff", fontSize: 16, fontWeight: 500, marginBottom: 28, textAlign: "center", zIndex: 1, fontFamily: 'Aldrich'}}>
         Hello User, What do you wanna know today?
       </p>
 
@@ -601,7 +602,7 @@ function LandingView({
             position: "absolute", top: -34, right: 0,
             background: "transparent", border: "1px solid rgba(251,144,176,0.35)",
             borderRadius: 8, padding: "4px 12px", color: "#FB90B0",
-            fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+            fontSize: 11, cursor: "pointer", fontFamily: "'Aldrich'",
             fontWeight: 500,
           }}>
             Error ±{Math.round(errorTolerance * 100)}%
@@ -646,12 +647,12 @@ function ResultView({
           {/* SQL */}
           {(result || streaming) && (
             <div style={{ marginBottom: 18 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 8, fontFamily: "'Aldrich'" }}>
                 Generated SQL Query
               </p>
               <div style={{
                 background: "rgba(0,0,0,0.35)", borderRadius: 8,
-                padding: "10px 14px", fontFamily: "monospace",
+                padding: "10px 14px", fontFamily: "Aldrich",
                 fontSize: 12, color: "#A2E3F6", lineHeight: 1.6,
               }}>
                 {result?.sql ?? <span style={{ color: "#5a4f65" }}>Generating...</span>}
@@ -662,7 +663,7 @@ function ResultView({
           {/* Planner rationale */}
           {result && (
             <div style={{ marginBottom: 18 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 8, fontFamily: "'Aldrich'" }}>
                 Planner Rationale
               </p>
               <div style={{
@@ -674,7 +675,7 @@ function ResultView({
                   ["Reason", result.strategyReason],
                   ["Target", result.target],
                 ].map(([k, v]) => (
-                  <p key={k} style={{ fontSize: 12, color: "#ffffff", fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
+                  <p key={k} style={{ fontSize: 12, color: "#ffffff", fontFamily: "'Aldrich'", margin: 0 }}>
                     <span style={{ fontWeight: 600 }}>{k}:</span> {v}
                   </p>
                 ))}
@@ -796,7 +797,7 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Alrich', sans-serif; background: #222222; color: #ffffff; height: 100vh; overflow: hidden; }
+        body { font-family: 'Aldrich'; background: #222222; color: #ffffff; height: 100vh; overflow: hidden; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(251,144,176,0.3); border-radius: 2px; }
@@ -828,7 +829,7 @@ export default function App() {
                 background: mode === m ? "rgba(251,144,176,0.12)" : "transparent",
                 color: mode === m ? "#FB90B0" : "#9a8aaa",
                 cursor: "pointer", fontSize: 13, fontWeight: 600,
-                fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s",
+                fontFamily: "'Aldrich'", transition: "all 0.2s",
               }}
                 onMouseEnter={(e) => { if (mode !== m) { e.currentTarget.style.borderColor = "rgba(251,144,176,0.45)"; e.currentTarget.style.color = "#ffffff"; } }}
                 onMouseLeave={(e) => { if (mode !== m) { e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)"; e.currentTarget.style.color = "#9a8aaa"; } }}
