@@ -155,6 +155,7 @@ function PlusMenu({ onClose }: { onClose: () => void }) {
             color: "#e0d0e8",
             textAlign: "left",
             transition: "background 0.15s",
+            fontFamily: "'BD Caramel', sans-serif",
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(251,144,176,0.1)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -192,7 +193,7 @@ function Sidebar({
       <div style={{ padding: "0 20px 28px" }}>
         <span
           style={{
-            fontFamily: "'Pacifico', cursive",
+            fontFamily: "'Aldrich', sans-serif",
             fontSize: 26,
             color: "#FB90B0",
             letterSpacing: 1,
@@ -225,6 +226,7 @@ function Sidebar({
               cursor: "pointer",
               fontSize: 14,
               fontWeight: 500,
+              fontFamily: "'BD Caramel', sans-serif",
               transition: "all 0.15s",
               textAlign: "left",
             }}
@@ -299,6 +301,7 @@ function InputBar({
             cursor: "pointer",
             flexShrink: 0,
             transition: "all 0.15s",
+            fontFamily: "'BD Caramel', sans-serif",
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(251,144,176,0.2)")}
           onMouseLeave={(e) =>
@@ -344,6 +347,7 @@ function InputBar({
               cursor: "pointer",
               flexShrink: 0,
               transition: "all 0.15s",
+              fontFamily: "'BD Caramel', sans-serif",
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "#FB90B0")}
             onMouseLeave={(e) => (e.currentTarget.style.background = "#FB90B0")}
@@ -624,6 +628,20 @@ mention strategies like stratified sampling or HyperLogLog when relevant, and be
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Pacifico&family=DM+Sans:wght@400;500;600;700&display=swap');
 
+        @font-face {
+          font-family: 'BD Caramel';
+          src: url('/fonts/BD_Caramel.otf') format('opentype');
+          font-weight: normal;
+          font-style: normal;
+        }
+
+        @font-face {
+          font-family: 'Aldrich';
+          src: url('/fonts/Aldrich.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+        }
+
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
@@ -720,7 +738,7 @@ mention strategies like stratified sampling or HyperLogLog when relevant, and be
                   cursor: "pointer",
                   fontSize: 13,
                   fontWeight: 600,
-                  fontFamily: "inherit",
+                  fontFamily: "'BD Caramel', sans-serif",
                   letterSpacing: 0.3,
                   transition: "all 0.2s",
                 }}
