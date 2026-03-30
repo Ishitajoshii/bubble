@@ -11,28 +11,28 @@ const BubbleStraight =
 // Colour palette — deep-space cyan / teal / indigo
 // ─────────────────────────────────────────────────────────────────────────────
 const C = {
-  bg:        "#04070f",
-  surface:   "#080d1a",
-  card:      "#09101e",
-  border:    "#0f1c30",
-  borderHi:  "#172540",
-  grid:      "#0b1422",
+  bg: "#04070f",
+  surface: "#080d1a",
+  card: "#222222",
+  border: "#0f1c30",
+  borderHi: "#172540",
+  grid: "#808080",
 
-  cyan:      "#22d3ee",
-  cyanDim:   "rgba(34,211,238,0.18)",
-  teal:      "#2dd4bf",
-  tealDim:   "rgba(45,212,191,0.15)",
-  purple:    "#818cf8",
+  cyan: "#22d3ee",
+  cyanDim: "rgba(34,211,238,0.18)",
+  teal: "#2dd4bf",
+  tealDim: "rgba(45,212,191,0.15)",
+  purple: "#818cf8",
   purpleDim: "rgba(129,140,248,0.18)",
-  indigo:    "#6366f1",
+  indigo: "#6366f1",
 
-  text:      "#c8d8f0",
-  textMid:   "#5a7090",
-  textDim:   "#2a3a52",
+  text: "#c8d8f0",
+  textMid: "#5a7090",
+  textDim: "#2a3a52",
 
   // aurora ribbon colours
-  aurora1:   "rgba(34,211,238,0.07)",
-  aurora2:   "rgba(99,102,241,0.06)",
+  aurora1: "rgba(34,211,238,0.07)",
+  aurora2: "rgba(99,102,241,0.06)",
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,17 +60,17 @@ interface HoveredState {
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 const TARGET_ERROR = 5;
-const W   = 640;
-const H   = 300;
+const W = 640;
+const H = 300;
 const PAD = { top: 32, right: 36, bottom: 52, left: 56 } as const;
-const MAX_ERR    = 60;
+const MAX_ERR = 60;
 const LERP_SPEED = 0.072; // fraction per frame — controls smoothness
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-const sx   = (pct: number): number => PAD.left + (pct / 100) * (W - PAD.left - PAD.right);
-const sy   = (err: number): number => { const r = H - PAD.top - PAD.bottom; return PAD.top + r - (err / MAX_ERR) * r; };
+const sx = (pct: number): number => PAD.left + (pct / 100) * (W - PAD.left - PAD.right);
+const sy = (err: number): number => { const r = H - PAD.top - PAD.bottom; return PAD.top + r - (err / MAX_ERR) * r; };
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
 function generatePoints(): ConvergencePoint[] {
@@ -80,10 +80,10 @@ function generatePoints(): ConvergencePoint[] {
     const scanned = parseFloat(((i + 1) * (93 / 20)).toFixed(1));
     err = Math.max(1.0, err * (0.68 + Math.random() * 0.16));
     pts.push({
-      iteration:        i + 1,
+      iteration: i + 1,
       data_scanned_pct: scanned,
-      relative_error:   parseFloat(err.toFixed(2)),
-      elapsed_ms:       ((i + 1) * (50 + Math.random() * 50)) | 0,
+      relative_error: parseFloat(err.toFixed(2)),
+      elapsed_ms: ((i + 1) * (50 + Math.random() * 50)) | 0,
     });
   }
   return pts;
@@ -106,28 +106,28 @@ function smoothPath(coords: Coord[]): string {
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ConvergenceGraph() {
-  const allPts  = useRef<ConvergencePoint[]>(generatePoints());
+  const allPts = useRef<ConvergencePoint[]>(generatePoints());
   const [revealed, setRevealed] = useState<ConvergencePoint[]>([]);
-  const [running,  setRunning]  = useState<boolean>(false);
-  const [done,     setDone]     = useState<boolean>(false);
+  const [running, setRunning] = useState<boolean>(true);
+  const [done, setDone] = useState<boolean>(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const rafRef  = useRef<number | null>(null);
-  const svgRef  = useRef<SVGSVGElement | null>(null);
-  const [hovered, setHovered]   = useState<HoveredState | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [hovered, setHovered] = useState<HoveredState | null>(null);
 
   // Smooth interpolated bubble position
-  const bubTarget  = useRef<Coord>({ x: sx(5), y: sy(MAX_ERR * 0.7) });
+  const bubTarget = useRef<Coord>({ x: sx(5), y: sy(MAX_ERR * 0.7) });
   const bubCurrent = useRef<Coord>({ x: sx(5), y: sy(MAX_ERR * 0.7) });
-  const [bubPos, setBubPos]     = useState<Coord>(bubCurrent.current);
+  const [bubPos, setBubPos] = useState<Coord>(bubCurrent.current);
 
   // Smooth interpolated path coords
-  const pathTarget  = useRef<Coord[]>([]);
+  const pathTarget = useRef<Coord[]>([]);
   const pathCurrent = useRef<Coord[]>([]);
   const [pathCoords, setPathCoords] = useState<Coord[]>([]);
 
   const targetMetIdx = revealed.findIndex(p => p.relative_error <= TARGET_ERROR);
-  const current      = revealed[revealed.length - 1] ?? null;
-  const targetMet    = targetMetIdx !== -1;
+  const current = revealed[revealed.length - 1] ?? null;
+  const targetMet = targetMetIdx !== -1;
 
   // ── RAF animation loop ────────────────────────────────────────────────────
   useEffect(() => {
@@ -135,7 +135,7 @@ export default function ConvergenceGraph() {
       let dirty = false;
 
       // Interpolate bubble
-      const tx = bubTarget.current.x,  ty = bubTarget.current.y;
+      const tx = bubTarget.current.x, ty = bubTarget.current.y;
       const cx = bubCurrent.current.x, cy = bubCurrent.current.y;
       const nx = lerp(cx, tx, LERP_SPEED);
       const ny = lerp(cy, ty, LERP_SPEED);
@@ -182,7 +182,7 @@ export default function ConvergenceGraph() {
       }
       const next = [...prev, allPts.current[prev.length]];
       const newPt = next[next.length - 1];
-      bubTarget.current  = { x: sx(newPt.data_scanned_pct), y: sy(newPt.relative_error) };
+      bubTarget.current = { x: sx(newPt.data_scanned_pct), y: sy(newPt.relative_error) };
       pathTarget.current = next.map(p => ({ x: sx(p.data_scanned_pct), y: sy(p.relative_error) }));
       return next;
     });
@@ -198,9 +198,9 @@ export default function ConvergenceGraph() {
     if (tickRef.current !== null) clearInterval(tickRef.current);
     allPts.current = generatePoints();
     const start: Coord = { x: sx(5), y: sy(MAX_ERR * 0.7) };
-    bubTarget.current   = start;
-    bubCurrent.current  = start;
-    pathTarget.current  = [];
+    bubTarget.current = start;
+    bubCurrent.current = start;
+    pathTarget.current = [];
     pathCurrent.current = [];
     setRevealed([]); setRunning(false); setDone(false);
     setHovered(null); setPathCoords([]); setBubPos(start);
@@ -210,7 +210,7 @@ export default function ConvergenceGraph() {
   function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     if (!revealed.length || !svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
-    const mx   = ((e.clientX - rect.left) / rect.width) * W;
+    const mx = ((e.clientX - rect.left) / rect.width) * W;
     let nearest: ConvergencePoint | null = null;
     let minD = Infinity;
     for (const p of revealed) {
@@ -223,14 +223,14 @@ export default function ConvergenceGraph() {
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const targetY  = sy(TARGET_ERROR);
-  const yTicks   = [0, 15, 30, 45, 60];
-  const xTicks   = [0, 25, 50, 75, 100];
+  const targetY = sy(TARGET_ERROR);
+  const yTicks = [0, 15, 30, 45, 60];
+  const xTicks = [0, 25, 50, 75, 100];
   const linePath = smoothPath(pathCoords);
   const areaPath = pathCoords.length >= 2
     ? linePath
-      + ` L ${pathCoords[pathCoords.length - 1].x} ${H - PAD.bottom}`
-      + ` L ${pathCoords[0].x} ${H - PAD.bottom} Z`
+    + ` L ${pathCoords[pathCoords.length - 1].x} ${H - PAD.bottom}`
+    + ` L ${pathCoords[0].x} ${H - PAD.bottom} Z`
     : "";
 
   return (
@@ -242,81 +242,67 @@ export default function ConvergenceGraph() {
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
       `}</style>
 
-      {/* ── Ambient background orbs ── */}
-      <div style={S.orb1}/>
-      <div style={S.orb2}/>
-
       <div style={S.wrapper}>
-        {/* Header */}
-        <div style={S.header}>
-          <div style={{ animation: "fadeUp 0.6s ease both" }}>
-            <div style={S.eyebrow}>SwiftQuery  ·  Convergence</div>
-            <h2 style={S.title}>Error Convergence</h2>
-            <div style={S.subtitle}>Approximate error as a function of data scanned</div>
-          </div>
-          <StatusBadge running={running} done={done} targetMet={targetMet} />
-        </div>
-
         {/* Chart */}
         <div style={S.card}>
-          <div style={S.cardTopBorder}/>
+          <div style={S.cardTopBorder} />
 
           <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={S.svg}
             onMouseMove={handleMouseMove} onMouseLeave={() => setHovered(null)}>
             <defs>
               <filter id="glow" x="-120%" y="-120%" width="340%" height="340%">
-                <feGaussianBlur stdDeviation="9" result="b"/>
-                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                <feGaussianBlur stdDeviation="9" result="b" />
+                <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
               </filter>
               <filter id="lineGlow" x="-20%" y="-60%" width="140%" height="220%">
-                <feGaussianBlur stdDeviation="3" result="b"/>
-                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                <feGaussianBlur stdDeviation="3" result="b" />
+                <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
               </filter>
               <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor={targetMet ? C.teal : C.cyan} stopOpacity="0.18"/>
-                <stop offset="55%"  stopColor={targetMet ? C.teal : C.cyan} stopOpacity="0.04"/>
-                <stop offset="100%" stopColor={targetMet ? C.teal : C.cyan} stopOpacity="0"/>
+                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.18" />
+                <stop offset="55%" stopColor="#ffffff" stopOpacity="0.04" />
+                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
               </linearGradient>
               <linearGradient id="auroraGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor={C.indigo} stopOpacity="0.09"/>
-                <stop offset="100%" stopColor={C.indigo} stopOpacity="0"/>
+                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.09" />
+                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
               </linearGradient>
               <clipPath id="clip">
-                <rect x={PAD.left} y={PAD.top} width={W - PAD.left - PAD.right} height={H - PAD.top - PAD.bottom}/>
+                <rect x={PAD.left} y={PAD.top} width={W - PAD.left - PAD.right} height={H - PAD.top - PAD.bottom} />
               </clipPath>
             </defs>
 
             {/* Grid */}
             {yTicks.map(v => (
-              <line key={v} x1={PAD.left} x2={W - PAD.right} y1={sy(v)} y2={sy(v)} stroke={C.grid} strokeWidth="1"/>
+              <line key={v} x1={PAD.left} x2={W - PAD.right} y1={sy(v)} y2={sy(v)} stroke={C.grid} strokeWidth="1" />
             ))}
             {xTicks.map(v => (
-              <line key={v} x1={sx(v)} x2={sx(v)} y1={PAD.top} y2={H - PAD.bottom} stroke={C.grid} strokeWidth="1"/>
+              <line key={v} x1={sx(v)} x2={sx(v)} y1={PAD.top} y2={H - PAD.bottom} stroke={C.grid} strokeWidth="1" />
             ))}
 
             {/* Y labels */}
             {yTicks.map(v => (
               <text key={v} x={PAD.left - 10} y={sy(v) + 4}
-                textAnchor="end" fill={C.textDim} fontSize="10" fontFamily="DM Mono">{v}%</text>
+                textAnchor="end" fill="#ffffff" fontSize="10" fontFamily="DM Mono">{v}%</text>
             ))}
             {/* X labels */}
             {xTicks.map(v => (
               <text key={v} x={sx(v)} y={H - PAD.bottom + 18}
-                textAnchor="middle" fill={C.textDim} fontSize="10" fontFamily="DM Mono">{v}%</text>
+                textAnchor="middle" fill="#ffffff" fontSize="10" fontFamily="DM Mono">{v}%</text>
             ))}
             {/* Axis titles */}
-            <text x={W / 2} y={H - 4} textAnchor="middle" fill={C.textMid} fontSize="10" fontFamily="DM Mono">
+            <text x={W / 2} y={H - 4} textAnchor="middle" fill="#ffffff" fontSize="10" fontFamily="DM Mono">
               Data Scanned (%)
             </text>
-            <text x={13} y={H / 2} textAnchor="middle" fill={C.textMid} fontSize="10" fontFamily="DM Mono"
+            <text x={13} y={H / 2} textAnchor="middle" fill="#ffffff" fontSize="10" fontFamily="DM Mono"
               transform={`rotate(-90,13,${H / 2})`}>Error (%)</text>
 
             <g clipPath="url(#clip)">
-              {/* Target threshold — purple dashed */}
+              {/* Target threshold — dashed */}
               <line x1={PAD.left} x2={W - PAD.right} y1={targetY} y2={targetY}
-                stroke={C.purple} strokeWidth="1" strokeDasharray="5,5" opacity="0.45"/>
+                stroke="#FB90B0" strokeWidth="1" strokeDasharray="5,5" opacity="1" />
               <text x={W - PAD.right - 4} y={targetY - 6}
-                textAnchor="end" fill={C.purple} fontSize="9" fontFamily="DM Mono" opacity="0.7">
+                textAnchor="end" fill="#FB90B0" fontSize="9" fontFamily="DM Mono" opacity="1">
                 5% target
               </text>
 
@@ -324,58 +310,51 @@ export default function ConvergenceGraph() {
               <rect x={PAD.left} y={targetY}
                 width={W - PAD.left - PAD.right} height={H - PAD.bottom - targetY}
                 fill={targetMet ? "rgba(45,212,191,0.04)" : "rgba(129,140,248,0.025)"}
-                style={{ transition: "fill 1s" }}/>
+                style={{ transition: "fill 1s" }} />
 
               {/* Aurora fill layers */}
               {areaPath && <>
-                <path d={areaPath} fill="url(#auroraGrad)"/>
-                <path d={areaPath} fill="url(#areaGrad)" style={{ transition: "fill 0.8s" }}/>
+                <path d={areaPath} fill="url(#auroraGrad)" />
+                <path d={areaPath} fill="url(#areaGrad)" style={{ transition: "fill 0.8s" }} />
               </>}
 
               {/* Glowing line shadow */}
               {linePath && (
                 <path d={linePath} fill="none"
-                  stroke={targetMet ? C.teal : C.cyan}
-                  strokeWidth="4" strokeLinecap="round"
-                  strokeDasharray="8,5"
-                  opacity="0.18"
-                  filter="url(#lineGlow)"/>
+                  stroke="#ffffff"
+                  strokeWidth="6" strokeLinecap="round"
+                  opacity="0.6"
+                  filter="url(#lineGlow)" />
               )}
 
-              {/* Main dashed error curve */}
+              {/* Main solid error curve */}
               {linePath && (
                 <path d={linePath} fill="none"
-                  stroke={targetMet ? C.teal : C.cyan}
-                  strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
-                  strokeDasharray="8,5"
-                  style={{ transition: "stroke 0.8s" }}/>
+                  stroke="#ffffff"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ transition: "stroke 0.8s" }} />
               )}
 
               {/* Ghost trail dots */}
               {revealed.map((p, i) => {
                 if (i === revealed.length - 1) return null;
-                const col     = targetMet ? "45,212,191" : "34,211,238";
+                const col = targetMet ? "45,212,191" : "34,211,238";
                 const opacity = 0.1 + (i / revealed.length) * 0.2;
                 return (
                   <circle key={i}
                     cx={sx(p.data_scanned_pct)} cy={sy(p.relative_error)}
-                    r="1.8" fill={`rgba(${col},${opacity})`}/>
+                    r="1.8" fill={`rgba(${col},${opacity})`} />
                 );
               })}
 
               {/* ── Bubble_straight SVG marker (inlined data URI) ── */}
               {revealed.length > 0 && (
-                <g filter="url(#glow)">
+                <g style={{ zIndex: 100, pointerEvents: "none" }}>
                   <image
                     href={BubbleStraight}
                     x={bubPos.x - 20} y={bubPos.y - 20}
                     width={40} height={40}
                     preserveAspectRatio="xMidYMid meet"
-                    style={{
-                      filter: targetMet
-                        ? "drop-shadow(0 0 10px rgba(45,212,191,0.7))"
-                        : "drop-shadow(0 0 10px rgba(34,211,238,0.7))",
-                    }}
                   />
                   {/* Error label */}
                   <text x={bubPos.x} y={bubPos.y - 32}
@@ -392,17 +371,17 @@ export default function ConvergenceGraph() {
               {hovered && hovered.point !== current && (
                 <g>
                   <circle cx={hovered.x} cy={hovered.y} r="4"
-                    fill={C.surface} stroke="rgba(34,211,238,0.55)" strokeWidth="1.5"/>
+                    fill={C.surface} stroke="#A2E3F6" strokeWidth="1.5" />
                   <line x1={hovered.x} x2={hovered.x} y1={hovered.y} y2={H - PAD.bottom}
-                    stroke="rgba(34,211,238,0.12)" strokeWidth="1" strokeDasharray="3,3"/>
+                    stroke="#A2E3F6" strokeWidth="1" strokeDasharray="3,3" />
                   <g transform={`translate(${Math.min(hovered.x + 14, W - PAD.right - 138)},${Math.max(hovered.y - 62, PAD.top)})`}>
                     <rect rx="8" ry="8" width="134" height="56"
-                      fill={C.card} stroke={C.borderHi} strokeWidth="1" opacity="0.97"/>
-                    <text x="11" y="17" fill={C.textMid} fontSize="9"  fontFamily="DM Mono">ITER {hovered.point.iteration}</text>
-                    <text x="11" y="31" fill={C.text}    fontSize="11" fontFamily="DM Mono" fontWeight="500">
+                      fill={C.card} stroke={C.borderHi} strokeWidth="1" opacity="0.97" />
+                    <text x="11" y="17" fill={C.textMid} fontSize="9" fontFamily="DM Mono">ITER {hovered.point.iteration}</text>
+                    <text x="11" y="31" fill={C.text} fontSize="11" fontFamily="DM Mono" fontWeight="500">
                       Error: {hovered.point.relative_error}%
                     </text>
-                    <text x="11" y="46" fill={C.textDim} fontSize="9"  fontFamily="DM Mono">
+                    <text x="11" y="46" fill={C.textDim} fontSize="9" fontFamily="DM Mono">
                       {hovered.point.elapsed_ms}ms · {hovered.point.data_scanned_pct}% scanned
                     </text>
                   </g>
@@ -417,44 +396,21 @@ export default function ConvergenceGraph() {
                   x1={sx(revealed[targetMetIdx].data_scanned_pct)}
                   x2={sx(revealed[targetMetIdx].data_scanned_pct)}
                   y1={PAD.top} y2={H - PAD.bottom}
-                  stroke="rgba(45,212,191,0.22)" strokeWidth="1" strokeDasharray="3,4"/>
+                  stroke="#A2E3F6" strokeWidth="1" strokeDasharray="3,4" />
                 <text
-                  x={sx(revealed[targetMetIdx].data_scanned_pct) + 6}
-                  y={PAD.top + 14}
-                  fill="rgba(45,212,191,0.65)" fontSize="9" fontFamily="DM Mono" letterSpacing="0.08em">
+                  x={sx(revealed[targetMetIdx].data_scanned_pct)}
+                  y={PAD.top - 8}
+                  textAnchor="middle"
+                  fill="#ffffff" fontSize="9" fontFamily="DM Mono" letterSpacing="0.08em">
                   TARGET MET
                 </text>
               </g>
             )}
           </svg>
 
-          {/* Legend */}
-          <div style={S.legend}>
-            <LegendLine color={C.cyan}   label="Error %" />
-            <LegendLine color={C.purple} label="5% Threshold" />
-            <LegendBubbleMini met={targetMet} />
-          </div>
+          {/* Legend removed per user request */}
         </div>
 
-        {/* Stats */}
-        <div style={S.statsRow}>
-          <StatCard label="Scanned"   value={current ? `${current.data_scanned_pct}%`                  : "—"} sub="of dataset"  bar={C.cyan}   />
-          <StatCard label="Saved"     value={current ? `${(100 - current.data_scanned_pct).toFixed(1)}%` : "—"} sub="computation" bar={C.teal}   />
-          <StatCard label="Error"     value={current ? `${current.relative_error}%`                    : "—"} sub="relative"    bar={targetMet ? C.teal : C.indigo} />
-          <StatCard label="Elapsed"   value={current ? `${current.elapsed_ms}ms`                       : "—"} sub="approx time" bar={C.textDim} />
-          <StatCard label="Iteration" value={current ? `${current.iteration} / 20`                     : "—"} sub="progress"    bar={C.purple}  />
-        </div>
-
-        {/* Controls */}
-        <div style={S.controls}>
-          <Btn primary onClick={() => {
-            if (done) { handleReset(); setTimeout(() => setRunning(true), 60); }
-            else setRunning(r => !r);
-          }}>
-            {done ? "↺  Rerun" : running ? "⏸  Pause" : "▶  Run Query"}
-          </Btn>
-          <Btn onClick={handleReset}>↺  Reset</Btn>
-        </div>
       </div>
     </div>
   );
@@ -466,17 +422,21 @@ export default function ConvergenceGraph() {
 
 interface StatusBadgeProps { running: boolean; done: boolean; targetMet: boolean; }
 function StatusBadge({ running, done, targetMet }: StatusBadgeProps) {
-  const col    = targetMet ? C.teal    : running ? C.cyan    : C.textMid;
-  const border = targetMet ? "rgba(45,212,191,0.3)"  : running ? "rgba(34,211,238,0.25)" : "rgba(90,112,144,0.25)";
-  const bg     = targetMet ? "rgba(45,212,191,0.06)" : running ? "rgba(34,211,238,0.05)" : "rgba(90,112,144,0.05)";
-  const label  = targetMet ? "TARGET MET" : running ? "SCANNING" : done ? "COMPLETE" : "IDLE";
+  const col = targetMet ? C.teal : running ? C.cyan : C.textMid;
+  const border = targetMet ? "rgba(45,212,191,0.3)" : running ? "rgba(34,211,238,0.25)" : "rgba(90,112,144,0.25)";
+  const bg = targetMet ? "rgba(45,212,191,0.06)" : running ? "rgba(34,211,238,0.05)" : "rgba(90,112,144,0.05)";
+  const label = targetMet ? "TARGET MET" : running ? "SCANNING" : done ? "COMPLETE" : "IDLE";
   return (
-    <div style={{ display:"flex", alignItems:"center", gap:8, color:col, background:bg,
-      border:`1px solid ${border}`, borderRadius:24, padding:"6px 14px",
-      fontFamily:"DM Mono", fontSize:"0.65rem", letterSpacing:"0.1em",
-      animation:"fadeUp 0.6s 0.15s ease both", opacity:0 }}>
-      <span style={{ width:6, height:6, borderRadius:"50%", background:col, flexShrink:0,
-        animation: running ? "blink 1.4s ease-in-out infinite" : "none" }}/>
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8, color: col, background: bg,
+      border: `1px solid ${border}`, borderRadius: 24, padding: "6px 14px",
+      fontFamily: "DM Mono", fontSize: "0.65rem", letterSpacing: "0.1em",
+      animation: "fadeUp 0.6s 0.15s ease both", opacity: 0
+    }}>
+      <span style={{
+        width: 6, height: 6, borderRadius: "50%", background: col, flexShrink: 0,
+        animation: running ? "blink 1.4s ease-in-out infinite" : "none"
+      }} />
       {label}
     </div>
   );
@@ -486,7 +446,7 @@ interface StatCardProps { label: string; value: string; sub: string; bar: string
 function StatCard({ label, value, sub, bar }: StatCardProps) {
   return (
     <div style={S.statCard}>
-      <div style={{ ...S.statBar, background: bar }}/>
+      <div style={{ ...S.statBar, background: bar }} />
       <div style={S.statLabel}>{label}</div>
       <div style={S.statValue}>{value}</div>
       <div style={S.statSub}>{sub}</div>
@@ -497,9 +457,9 @@ function StatCard({ label, value, sub, bar }: StatCardProps) {
 interface LegendLineProps { color: string; label: string; }
 function LegendLine({ color, label }: LegendLineProps) {
   return (
-    <div style={{ display:"flex", alignItems:"center", gap:8, color:C.textMid, fontSize:"0.68rem", fontFamily:"DM Mono" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.textMid, fontSize: "0.68rem", fontFamily: "DM Mono" }}>
       <svg width="26" height="10">
-        <line x1="0" y1="5" x2="26" y2="5" stroke={color} strokeWidth="1.5" strokeDasharray="6,4"/>
+        <line x1="0" y1="5" x2="26" y2="5" stroke={color} strokeWidth="1.5" strokeDasharray="6,4" />
       </svg>
       {label}
     </div>
@@ -508,14 +468,14 @@ function LegendLine({ color, label }: LegendLineProps) {
 
 interface LegendBubbleMiniProps { met: boolean; }
 function LegendBubbleMini({ met }: LegendBubbleMiniProps) {
-  const col   = met ? "45,212,191" : "34,211,238";
+  const col = met ? "45,212,191" : "34,211,238";
   const solid = met ? C.teal : C.cyan;
   return (
-    <div style={{ display:"flex", alignItems:"center", gap:8, color:C.textMid, fontSize:"0.68rem", fontFamily:"DM Mono" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.textMid, fontSize: "0.68rem", fontFamily: "DM Mono" }}>
       <svg width="22" height="22" viewBox="0 0 22 22">
-        <circle cx="11" cy="11" r="8" fill={`rgba(${col},0.06)`} stroke={`rgba(${col},0.5)`} strokeWidth="1.4"/>
-        <ellipse cx="8.4" cy="8.6" rx="2.5" ry="1.3" fill="rgba(255,255,255,0.22)" transform="rotate(-32,8.4,8.6)"/>
-        <circle cx="11" cy="11" r="2" fill={solid} opacity="0.8"/>
+        <circle cx="11" cy="11" r="8" fill={`rgba(${col},0.06)`} stroke={`rgba(${col},0.5)`} strokeWidth="1.4" />
+        <ellipse cx="8.4" cy="8.6" rx="2.5" ry="1.3" fill="rgba(255,255,255,0.22)" transform="rotate(-32,8.4,8.6)" />
+        <circle cx="11" cy="11" r="2" fill={solid} opacity="0.8" />
       </svg>
       Current Point
     </div>
@@ -526,12 +486,12 @@ interface BtnProps { children: React.ReactNode; primary?: boolean; onClick: () =
 function Btn({ children, primary, onClick }: BtnProps) {
   return (
     <button onClick={onClick} style={{
-      background:  primary ? "rgba(34,211,238,0.07)" : C.surface,
-      border:      `1px solid ${primary ? "rgba(34,211,238,0.35)" : C.border}`,
-      color:       primary ? C.cyan : C.textMid,
-      padding:     "9px 22px", borderRadius: 10,
-      fontFamily:  "DM Mono", fontSize: "0.7rem", letterSpacing: "0.05em",
-      cursor:      "pointer", transition: "all 0.2s",
+      background: primary ? "rgba(34,211,238,0.07)" : C.surface,
+      border: `1px solid ${primary ? "rgba(34,211,238,0.35)" : C.border}`,
+      color: primary ? C.cyan : C.textMid,
+      padding: "9px 22px", borderRadius: 10,
+      fontFamily: "DM Mono", fontSize: "0.7rem", letterSpacing: "0.05em",
+      cursor: "pointer", transition: "all 0.2s",
     }}>
       {children}
     </button>
@@ -595,17 +555,17 @@ const S: Record<string, React.CSSProperties> = {
     background: "linear-gradient(90deg,transparent,rgba(34,211,238,0.3),rgba(99,102,241,0.2),transparent)",
     borderRadius: 1,
   },
-  svg:      { width: "100%", height: "auto", display: "block", cursor: "crosshair" },
-  legend:   { display: "flex", gap: 22, alignItems: "center", marginTop: 12, flexWrap: "wrap" },
+  svg: { width: "100%", height: "auto", display: "block", cursor: "crosshair" },
+  legend: { display: "flex", gap: 22, alignItems: "center", marginTop: 12, flexWrap: "wrap" },
   statsRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 12 },
   statCard: {
     background: C.surface, border: `1px solid ${C.border}`,
     borderRadius: 12, padding: "14px 16px",
     position: "relative", overflow: "hidden",
   },
-  statBar:   { position: "absolute", bottom: 0, left: 0, right: 0, height: "2px", borderRadius: "0 0 12px 12px" },
+  statBar: { position: "absolute", bottom: 0, left: 0, right: 0, height: "2px", borderRadius: "0 0 12px 12px" },
   statLabel: { fontFamily: "DM Mono", fontSize: "0.58rem", letterSpacing: "0.14em", textTransform: "uppercase", color: C.textDim, marginBottom: 7 },
   statValue: { fontFamily: "'Syne', sans-serif", fontSize: "1.2rem", fontWeight: 600, color: C.text, transition: "color 0.4s" },
-  statSub:   { fontSize: "0.65rem", color: C.textDim, marginTop: 3, fontFamily: "DM Mono" },
-  controls:  { display: "flex", gap: 10, flexWrap: "wrap" },
+  statSub: { fontSize: "0.65rem", color: C.textDim, marginTop: 3, fontFamily: "DM Mono" },
+  controls: { display: "flex", gap: 10, flexWrap: "wrap" },
 };
