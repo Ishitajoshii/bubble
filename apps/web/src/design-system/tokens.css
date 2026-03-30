@@ -265,6 +265,10 @@ h2 {
   font-weight: 600;
 }
 
+.panel-note {
+  margin-top: 14px;
+}
+
 .empty-state {
   margin-top: 14px;
   padding: 18px;
@@ -305,6 +309,10 @@ h2 {
   fill: var(--surface);
   stroke: var(--accent);
   stroke-width: 3;
+}
+
+.graph__dot-core {
+  fill: var(--accent);
 }
 
 .graph__dot--live {
