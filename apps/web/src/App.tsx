@@ -18,6 +18,7 @@ import type {
   QuerySessionEvent,
   QuerySessionEventType,
 } from "./types/query";
+import ConvergenceGraph from "./features/convergence-graph";
 
 const queryClient = createQuerySessionClient();
 
@@ -399,10 +400,7 @@ export default function App() {
             Plots streamed `approx_progress` points with the target threshold line.
           </p>
         </div>
-        <ConvergenceGraph
-          progressEvents={approxProgressEvents.map((event) => event.payload)}
-          targetErrorPct={latestMetric?.target_error_pct ?? null}
-        />
+        <ConvergenceGraph />
       </section>
     </div>
   );
@@ -410,106 +408,6 @@ export default function App() {
 
 function EmptyState({ label }: { label: string }) {
   return <div className="empty-state">{label}</div>;
-}
-
-function ConvergenceGraph({
-  progressEvents,
-  targetErrorPct,
-}: {
-  progressEvents: ApproxProgressPayload[];
-  targetErrorPct: number | null;
-}) {
-  if (progressEvents.length === 0) {
-    return <EmptyState label="Waiting for approx_progress events." />;
-  }
-
-  const width = 860;
-  const height = 260;
-  const padding = 28;
-  const plotWidth = width - padding * 2;
-  const plotHeight = height - padding * 2;
-  const highestErrorPct = Math.max(
-    ...progressEvents.map((event) => event.relative_error * 100),
-    targetErrorPct ?? 0,
-    5,
-  );
-  const maxErrorPct = Math.ceil(highestErrorPct / 5) * 5;
-
-  const points = progressEvents.map((event) => {
-    const x = padding + (event.data_scanned_pct / 100) * plotWidth;
-    const errorPct = event.relative_error * 100;
-    const y = padding + (1 - errorPct / maxErrorPct) * plotHeight;
-    return {
-      x,
-      y,
-      errorPct,
-      label: `${formatPercent(event.data_scanned_pct)} scanned · ${formatFractionAsPercent(
-        event.relative_error,
-      )} error`,
-    };
-  });
-
-  const linePath = points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-    .join(" ");
-
-  const lastPoint = lastItem(points)!;
-  const targetLineY =
-    targetErrorPct === null
-      ? null
-      : padding + (1 - targetErrorPct / maxErrorPct) * plotHeight;
-
-  return (
-    <div className="graph">
-      <svg
-        className="graph__svg"
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Convergence graph"
-      >
-        <rect
-          x={padding}
-          y={padding}
-          width={plotWidth}
-          height={plotHeight}
-          rx="18"
-          className="graph__frame"
-        />
-
-        {targetLineY !== null ? (
-          <>
-            <line
-              x1={padding}
-              x2={padding + plotWidth}
-              y1={targetLineY}
-              y2={targetLineY}
-              className="graph__target-line"
-            />
-            <text x={padding + 12} y={targetLineY - 8} className="graph__label">
-              target {targetErrorPct === null ? "" : formatPercent(targetErrorPct)}
-            </text>
-          </>
-        ) : null}
-
-        <path d={linePath} className="graph__path" />
-
-        {points.map((point, index) => (
-          <circle
-            key={`${point.x}-${point.y}`}
-            cx={point.x}
-            cy={point.y}
-            r={index === points.length - 1 ? 8 : 5}
-            className={index === points.length - 1 ? "graph__dot graph__dot--live" : "graph__dot"}
-          />
-        ))}
-      </svg>
-
-      <div className="graph__summary">
-        <span>{lastPoint.label}</span>
-        <span>{progressEvents.length} progress updates</span>
-      </div>
-    </div>
-  );
 }
 
 function getLastEventByType<Type extends QuerySessionEventType>(
