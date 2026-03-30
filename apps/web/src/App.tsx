@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import ConvergenceGraph from "./features/convergence-graph";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SVG Assets
@@ -198,123 +199,6 @@ async function runSimulatedPipeline(
     speedup: 4.48,
     convergencePoints: points,
   };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ConvergenceGraph
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ConvergenceGraph({
-  points,
-  targetError,
-  animating,
-}: {
-  points: { x: number; y: number }[];
-  targetError: number;
-  animating: boolean;
-}) {
-  const W = 580, H = 240;
-  const PAD = { top: 16, right: 20, bottom: 40, left: 46 };
-  const innerW = W - PAD.left - PAD.right;
-  const innerH = H - PAD.top - PAD.bottom;
-
-  const maxY = Math.max(40, ...points.map((p) => p.y)) * 1.15;
-
-  const toX = (x: number) => PAD.left + (x / 100) * innerW;
-  const toY = (y: number) => PAD.top + innerH - (y / maxY) * innerH;
-
-  const pathD = points.length < 2 ? "" : points.map((p, i) =>
-    `${i === 0 ? "M" : "L"} ${toX(p.x).toFixed(1)} ${toY(p.y).toFixed(1)}`
-  ).join(" ");
-
-  const targetY = toY(targetError);
-  const last = points[points.length - 1];
-
-  return (
-    <svg
-      width="100%"
-      viewBox={`0 0 ${W} ${H}`}
-      style={{ display: "block", overflow: "visible" }}
-    >
-      {/* Grid lines */}
-      {[0, 25, 50, 75, 100].map((v) => (
-        <line
-          key={v}
-          x1={toX(v)} y1={PAD.top}
-          x2={toX(v)} y2={PAD.top + innerH}
-          stroke="rgba(255,255,255,0.06)" strokeWidth="1"
-        />
-      ))}
-      {[0, 0.25, 0.5, 0.75, 1].map((v) => (
-        <line
-          key={v}
-          x1={PAD.left} y1={PAD.top + innerH * (1 - v)}
-          x2={PAD.left + innerW} y2={PAD.top + innerH * (1 - v)}
-          stroke="rgba(255,255,255,0.06)" strokeWidth="1"
-        />
-      ))}
-
-      {/* Target threshold line */}
-      <line
-        x1={PAD.left} y1={targetY}
-        x2={PAD.left + innerW} y2={targetY}
-        stroke="#FB90B0" strokeWidth="1.2" strokeDasharray="5,4" opacity="0.7"
-      />
-      <text x={PAD.left + innerW + 4} y={targetY + 4} fill="#FB90B0" fontSize="10" opacity="0.8">
-        {targetError}%
-      </text>
-
-      {/* Convergence curve */}
-      {pathD && (
-        <path
-          d={pathD}
-          fill="none"
-          stroke="white"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.35))" }}
-        />
-      )}
-
-      {/* Moving dot */}
-      {last && (
-        <g>
-          <circle cx={toX(last.x)} cy={toY(last.y)} r="6" fill="#A2E3F6" stroke="white" strokeWidth="1.5"
-            style={animating ? { animation: "dotPulse 1s ease-in-out infinite" } : {}} />
-          <rect
-            x={toX(last.x) - 22} y={toY(last.y) - 26}
-            width="56" height="18" rx="5"
-            fill="rgba(30,22,35,0.9)" stroke="rgba(162,227,246,0.5)" strokeWidth="0.8"
-          />
-          <text x={toX(last.x) + 6} y={toY(last.y) - 14} fill="#e0d0e8" fontSize="10" textAnchor="middle">
-            {last.x}, {last.y.toFixed(1)}
-          </text>
-        </g>
-      )}
-
-      {/* Axes */}
-      <line x1={PAD.left} y1={PAD.top} x2={PAD.left} y2={PAD.top + innerH} stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-      <line x1={PAD.left} y1={PAD.top + innerH} x2={PAD.left + innerW} y2={PAD.top + innerH} stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-
-      {/* Axis labels */}
-      <text
-        x={PAD.left - 8} y={PAD.top + innerH / 2}
-        fill="rgba(255,255,255,0.35)" fontSize="10" textAnchor="middle"
-        transform={`rotate(-90, ${PAD.left - 28}, ${PAD.top + innerH / 2})`}
-      >
-        Error Percentage
-      </text>
-      <text x={PAD.left + innerW / 2} y={H - 6} fill="rgba(255,255,255,0.35)" fontSize="10" textAnchor="middle">
-        Data Scanned Percentage
-      </text>
-
-      {/* X tick labels */}
-      {[0, 25, 50, 75, 100].map((v) => (
-        <text key={v} x={toX(v)} y={PAD.top + innerH + 14} fill="rgba(255,255,255,0.3)" fontSize="9" textAnchor="middle">{v}</text>
-      ))}
-    </svg>
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -799,11 +683,7 @@ function ResultView({
           {/* Convergence graph */}
           {(convergencePoints.length > 0 || result) && (
             <div>
-              <ConvergenceGraph
-                points={convergencePoints}
-                targetError={targetError * 100}
-                animating={animating}
-              />
+              <ConvergenceGraph />
             </div>
           )}
 
@@ -925,7 +805,6 @@ export default function App() {
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes dotBounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-7px)} }
         @keyframes menuIn { from{opacity:0;transform:translateY(6px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
-        @keyframes dotPulse { 0%,100%{r:6} 50%{r:8} }
       `}</style>
 
       <div style={{
