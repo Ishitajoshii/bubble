@@ -11,30 +11,28 @@ def route_query(
     )
 
     if live_mode:
-        return PlannerOutput(
-            strategy="reservoir_sampling",
-            rationale="Live mode sessions use reservoir summaries for append-only updates.",
+        return _exact_fallback(
             confidence_level=confidence_level,
             target_error_pct=target_error_pct,
             target_summary=target_summary,
+            reason="Live mode is not implemented yet.",
         )
 
-    if "count(distinct" in normalized:
-        return PlannerOutput(
-            strategy="hyperloglog",
-            rationale="COUNT DISTINCT is routed to mergeable sketch estimation.",
+    unsupported_patterns = (
+        "count(distinct",
+        "group by",
+        "order by",
+        "having",
+        " join ",
+        " union ",
+        " distinct ",
+    )
+    if any(pattern in normalized for pattern in unsupported_patterns):
+        return _exact_fallback(
             confidence_level=confidence_level,
             target_error_pct=target_error_pct,
             target_summary=target_summary,
-        )
-
-    if "group by" in normalized:
-        return PlannerOutput(
-            strategy="stratified_sampling",
-            rationale="GROUP BY detected; use stratified sampling to protect skewed groups.",
-            confidence_level=confidence_level,
-            target_error_pct=target_error_pct,
-            target_summary=target_summary,
+            reason="Only COUNT, SUM, and AVG without GROUP BY are supported by adaptive sampling right now.",
         )
 
     if normalized.startswith("select") and any(
@@ -42,18 +40,31 @@ def route_query(
     ):
         return PlannerOutput(
             strategy="adaptive_sampling",
-            rationale="Single-table aggregate without GROUP BY fits adaptive sampling.",
+            rationale="COUNT, SUM, and AVG without GROUP BY currently use adaptive sampling.",
             confidence_level=confidence_level,
             target_error_pct=target_error_pct,
             target_summary=target_summary,
+            planner_version="adaptive-planner-v1",
         )
 
+    return _exact_fallback(
+        confidence_level=confidence_level,
+        target_error_pct=target_error_pct,
+        target_summary=target_summary,
+        reason="Query is outside the supported adaptive-sampling subset.",
+    )
+
+
+def _exact_fallback(
+    *, confidence_level: float, target_error_pct: float, target_summary: str, reason: str
+) -> PlannerOutput:
     return PlannerOutput(
         strategy="exact_fallback",
-        rationale="Query is outside the supported approximation subset.",
+        rationale=reason,
         confidence_level=confidence_level,
         target_error_pct=target_error_pct,
         target_summary=target_summary,
         approx_supported=False,
-        fallback_reason="Unsupported SQL subset for v1.",
+        fallback_reason=reason,
+        planner_version="adaptive-planner-v1",
     )

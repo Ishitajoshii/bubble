@@ -1,16 +1,19 @@
+from pathlib import Path
+
 from app.schemas.dataset import DatasetField, DatasetSummary
+from app.services.datasets.bootstrap import DATASET_ROW_COUNTS, ensure_dataset_file
 
 _DATASETS: dict[str, DatasetSummary] = {
     "orders_v1": DatasetSummary(
         dataset_id="orders_v1",
         label="Orders",
         description="E-commerce order facts for aggregate and group-by benchmarks.",
-        row_count=1_200_000,
-        capabilities=["count", "sum", "avg", "count_distinct", "group_by"],
+        row_count=DATASET_ROW_COUNTS["orders_v1"],
+        capabilities=["count", "sum", "avg"],
         example_prompts=[
             "What is total revenue?",
-            "What is total revenue by region?",
             "How many delivered orders do we have?",
+            "What is the average order value?",
             "How many unique customers placed orders?",
         ],
         schema=[
@@ -56,11 +59,11 @@ _DATASETS: dict[str, DatasetSummary] = {
         dataset_id="shipments_v1",
         label="Shipments",
         description="Shipment delivery facts for late-delivery and delay metrics.",
-        row_count=640_000,
-        capabilities=["count", "avg", "group_by"],
+        row_count=DATASET_ROW_COUNTS["shipments_v1"],
+        capabilities=["count", "avg"],
         example_prompts=[
             "How many late shipments are there?",
-            "What is average delivery delay by carrier?",
+            "What is the average delivery delay?",
         ],
         schema=[
             DatasetField(
@@ -101,3 +104,7 @@ def get_dataset(dataset_id: str) -> DatasetSummary | None:
     if dataset is None:
         return None
     return dataset.model_copy(deep=True)
+
+
+def get_dataset_file_path(dataset_id: str) -> Path:
+    return ensure_dataset_file(dataset_id)

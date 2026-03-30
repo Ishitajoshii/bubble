@@ -82,6 +82,10 @@ export default function App() {
   const planEvent = getLastEventByType(events, "plan_ready");
   const approxProgressEvents = getEventsByType(events, "approx_progress");
   const approxFinalEvent = getLastEventByType(events, "approx_final");
+  const convergencePoints = withFinalSnapshot(
+    approxProgressEvents.map((event) => event.payload),
+    approxFinalEvent?.payload,
+  );
   const exactResultEvent = getLastEventByType(events, "exact_result");
   const latestMetric =
     approxFinalEvent?.payload ?? lastItem(approxProgressEvents)?.payload ?? null;
@@ -400,7 +404,7 @@ export default function App() {
           </p>
         </div>
         <ConvergenceGraph
-          progressEvents={approxProgressEvents.map((event) => event.payload)}
+          progressEvents={convergencePoints}
           targetErrorPct={latestMetric?.target_error_pct ?? null}
         />
       </section>
@@ -543,4 +547,24 @@ function getEventsByType<Type extends QuerySessionEventType>(
 
 function lastItem<Type>(items: Type[]): Type | undefined {
   return items.length === 0 ? undefined : items[items.length - 1];
+}
+
+function withFinalSnapshot(
+  progressEvents: ApproxProgressPayload[],
+  finalEvent: ApproxProgressPayload | undefined,
+): ApproxProgressPayload[] {
+  if (!finalEvent) {
+    return progressEvents;
+  }
+
+  const lastProgress = lastItem(progressEvents);
+  if (
+    lastProgress &&
+    lastProgress.iteration === finalEvent.iteration &&
+    lastProgress.sample_rows === finalEvent.sample_rows
+  ) {
+    return progressEvents;
+  }
+
+  return [...progressEvents, finalEvent];
 }
