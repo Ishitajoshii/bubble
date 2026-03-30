@@ -100,7 +100,7 @@ const SqlIcon = () => (
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Mode = "Live" | "Regular";
-type AppView = "landing" | "swiftquery";
+type AppView = "landing" | "bubble";
 
 interface PipelineStep {
   id: string;
@@ -615,7 +615,7 @@ function LandingView({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SwiftQuery Result View
+// Bubble Result View
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ResultView({
@@ -751,7 +751,7 @@ export default function App() {
   }, []);
 
   const handleSubmit = useCallback(async (prompt: string) => {
-    setView("swiftquery");
+    setView("bubble");
     setResult(null);
     setConvergencePoints([]);
     setStreaming(true);

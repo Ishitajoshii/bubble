@@ -1,4 +1,4 @@
-# SwiftQuery v1 Architecture
+# Bubble v1 Architecture
 
 ## Goal
 

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class Settings(BaseModel):
-    app_name: str = "swiftquery-api"
+    app_name: str = "bubble-api"
     api_prefix: str = "/api"
     default_error_tolerance: float = 0.05
     default_confidence_level: float = 0.95

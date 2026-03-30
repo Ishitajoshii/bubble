@@ -11,7 +11,7 @@ settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
-    description="Stub query-session API for SwiftQuery.",
+    description="Stub query-session API for Bubble.",
 )
 
 app.add_middleware(

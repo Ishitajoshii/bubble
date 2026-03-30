@@ -583,7 +583,7 @@ export default function App() {
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
-          system: `You are Bubble, a friendly AI assistant for SwiftQuery — a fast approximate query engine. 
+          system: `You are Bubble, a friendly AI assistant for Bubble — a fast approximate query engine. 
 You help users understand data through natural language. When users ask data questions, explain how approximate sampling works,
 mention strategies like stratified sampling or HyperLogLog when relevant, and be concise and helpful. Mode: ${mode}.`,
           messages: [

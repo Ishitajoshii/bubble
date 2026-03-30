@@ -1,1 +1,1 @@
-"""SwiftQuery API package."""
+"""Bubble API package."""

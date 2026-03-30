@@ -1,7 +1,7 @@
 [project]
-name = "swiftquery-api"
+name = "bubble-api"
 version = "0.1.0"
-description = "FastAPI stub backend for SwiftQuery"
+description = "FastAPI stub backend for Bubble"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.111,<1.0",
