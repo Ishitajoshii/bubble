@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest.mock import patch
 
 from app.core.config import get_settings
 from app.schemas.query import CreateQuerySessionRequest
+from app.services.approx.stratified_sampling import run_stratified_sampling
 from app.services.datasets.uploads import register_uploaded_file
-from app.services.exact.duckdb_runner import fetch_group_populations
+from app.services.datasets.catalog import get_dataset
+from app.services.exact.duckdb_runner import ProjectionBatch, fetch_group_populations
 from app.services.planner.parser import parse_adaptive_query
 from app.services.planner.router import route_query
 from app.services.planner.validator import validate_adaptive_query
@@ -83,6 +86,64 @@ class StratifiedStreamingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(planner.strategy, "exact_fallback")
         self.assertIn("below 5,000 filtered rows", planner.fallback_reason or "")
+
+    @patch("app.services.approx.stratified_sampling.stream_projection")
+    def test_grouped_sampling_uses_single_projection_stream(
+        self, stream_projection_mock
+    ) -> None:
+        dataset = get_dataset("orders_v1")
+        assert dataset is not None
+
+        query = validate_adaptive_query(
+            parse_adaptive_query(
+                "SELECT region, SUM(total_amount) AS revenue "
+                "FROM orders_v1 GROUP BY region ORDER BY revenue DESC;"
+            ),
+            dataset,
+        )
+        group_populations, _latency_ms = fetch_group_populations(
+            dataset=dataset,
+            sql=query.group_population_sql(),
+        )
+
+        class FakeProjectionStream:
+            def __init__(self) -> None:
+                self.fetch_calls = 0
+
+            def fetch(self, row_count: int) -> ProjectionBatch:
+                self.fetch_calls += 1
+                if self.fetch_calls == 1:
+                    return ProjectionBatch(
+                        column_names=("region", "total_amount"),
+                        rows=[
+                            ("West", 120.0),
+                            ("North", 110.0),
+                            ("East", 90.0),
+                            ("South", 80.0),
+                        ],
+                        latency_ms=2,
+                    )
+                return ProjectionBatch(
+                    column_names=("region", "total_amount"),
+                    rows=[],
+                    latency_ms=3,
+                )
+
+        projection_stream = FakeProjectionStream()
+        stream_projection_mock.return_value.__enter__.return_value = projection_stream
+
+        run_stratified_sampling(
+            dataset=dataset,
+            query=query,
+            group_populations=group_populations,
+            target_error=0.05,
+            confidence_level=0.95,
+        )
+
+        self.assertEqual(stream_projection_mock.call_count, 1)
+        projection_sql = stream_projection_mock.call_args.kwargs["projection_sql"]
+        self.assertEqual(projection_sql, query.projection_sql())
+        self.assertGreaterEqual(projection_stream.fetch_calls, 1)
 
     def _decode_event(self, encoded_event: str) -> dict:
         for line in encoded_event.splitlines():
