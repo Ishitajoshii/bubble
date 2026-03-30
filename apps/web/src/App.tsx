@@ -21,6 +21,7 @@ import type {
   AnyQuerySessionEvent,
   ApproxProgressPayload,
   DatasetSummary,
+  ExactResultPayload,
   QuerySessionEvent,
   QuerySessionEventType,
 } from "./types/query";
@@ -100,6 +101,9 @@ export default function App() {
     approxFinalEvent?.payload ?? lastItem(approxProgressEvents)?.payload ?? null;
   const planner = planEvent?.payload.planner ?? null;
   const exactResult = exactResultEvent?.payload ?? null;
+  const runtimeComparison = exactResult
+    ? describeRuntimeComparison(exactResult)
+    : null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -469,22 +473,34 @@ export default function App() {
             <p className="subtle">Arrives asynchronously after `approx_final`.</p>
           </div>
           {exactResult ? (
-            <dl className="detail-list">
-              <div>
-                <dt>Exact value</dt>
-                <dd>{exactResult.display_value}</dd>
-              </div>
-              <div>
-                <dt>Delta</dt>
-                <dd>
-                  {exactResult.delta} · {formatFractionAsPercent(exactResult.delta_pct)}
-                </dd>
-              </div>
-              <div>
-                <dt>Speedup</dt>
-                <dd>{exactResult.speedup.toFixed(2)}x</dd>
-              </div>
-            </dl>
+            <>
+              <dl className="detail-list">
+                <div>
+                  <dt>Exact value</dt>
+                  <dd>{exactResult.display_value}</dd>
+                </div>
+                <div>
+                  <dt>Delta</dt>
+                  <dd>
+                    {exactResult.delta} · {formatFractionAsPercent(exactResult.delta_pct)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{runtimeComparison?.label ?? "Runtime"}</dt>
+                  <dd>{runtimeComparison?.value ?? `${exactResult.speedup.toFixed(2)}x`}</dd>
+                </div>
+                <div>
+                  <dt>Approx vs exact</dt>
+                  <dd>
+                    {formatDuration(exactResult.approx_latency_ms)} ·{" "}
+                    {formatDuration(exactResult.exact_latency_ms)}
+                  </dd>
+                </div>
+              </dl>
+              {runtimeComparison?.note ? (
+                <p className="subtle panel-note">{runtimeComparison.note}</p>
+              ) : null}
+            </>
           ) : (
             <EmptyState label="Waiting for the exact result event." />
           )}
@@ -518,6 +534,18 @@ function ConvergenceGraph({
   progressEvents: ApproxProgressPayload[];
   targetErrorPct: number | null;
 }) {
+  const [maxErrorPct, setMaxErrorPct] = useState(25);
+
+  useEffect(() => {
+    if (progressEvents.length === 0) {
+      setMaxErrorPct(25);
+      return;
+    }
+
+    const firstErrorPct = progressEvents[0].relative_error * 100;
+    setMaxErrorPct(deriveGraphCeiling(firstErrorPct, targetErrorPct));
+  }, [progressEvents.length, progressEvents[0]?.iteration, targetErrorPct]);
+
   if (progressEvents.length === 0) {
     return <EmptyState label="Waiting for approx_progress events." />;
   }
@@ -527,17 +555,16 @@ function ConvergenceGraph({
   const padding = 28;
   const plotWidth = width - padding * 2;
   const plotHeight = height - padding * 2;
-  const highestErrorPct = Math.max(
-    ...progressEvents.map((event) => event.relative_error * 100),
-    targetErrorPct ?? 0,
-    5,
-  );
-  const maxErrorPct = Math.ceil(highestErrorPct / 5) * 5;
 
   const points = progressEvents.map((event) => {
-    const x = padding + (event.data_scanned_pct / 100) * plotWidth;
+    const x = roundGraphCoordinate(
+      padding + (event.data_scanned_pct / 100) * plotWidth,
+    );
     const errorPct = event.relative_error * 100;
-    const y = padding + (1 - errorPct / maxErrorPct) * plotHeight;
+    const plottedErrorPct = Math.min(errorPct, maxErrorPct);
+    const y = roundGraphCoordinate(
+      padding + (1 - plottedErrorPct / maxErrorPct) * plotHeight,
+    );
     return {
       x,
       y,
@@ -548,15 +575,15 @@ function ConvergenceGraph({
     };
   });
 
-  const linePath = points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-    .join(" ");
+  const linePath = buildGraphPath(points);
 
   const lastPoint = lastItem(points)!;
   const targetLineY =
     targetErrorPct === null
       ? null
-      : padding + (1 - targetErrorPct / maxErrorPct) * plotHeight;
+      : roundGraphCoordinate(
+          padding + (1 - targetErrorPct / maxErrorPct) * plotHeight,
+        );
 
   return (
     <div className="graph">
@@ -593,20 +620,36 @@ function ConvergenceGraph({
         <path d={linePath} className="graph__path" />
 
         {points.map((point, index) => (
-          <circle
-            key={`${point.x}-${point.y}`}
-            cx={point.x}
-            cy={point.y}
-            r={index === points.length - 1 ? 8 : 5}
-            className={index === points.length - 1 ? "graph__dot graph__dot--live" : "graph__dot"}
-          />
+          <g key={`${point.x}-${point.y}`}>
+            <circle
+              cx={point.x}
+              cy={point.y}
+              r={index === points.length - 1 ? 8 : 5}
+              className={index === points.length - 1 ? "graph__dot graph__dot--live" : "graph__dot"}
+            />
+            {index === points.length - 1 ? (
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={3.5}
+                className="graph__dot-core"
+              />
+            ) : null}
+          </g>
         ))}
       </svg>
 
       <div className="graph__summary">
         <span>{lastPoint.label}</span>
-        <span>{progressEvents.length} progress updates</span>
+        <span>
+          {progressEvents.length} progress update{progressEvents.length === 1 ? "" : "s"}
+        </span>
       </div>
+      {progressEvents.length === 1 ? (
+        <p className="subtle panel-note">
+          This query converged in a single sampling step, so the graph shows an anchored endpoint instead of a longer trajectory.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -675,4 +718,66 @@ function mergeDatasets(
   }
 
   return [...merged.values()];
+}
+
+function describeRuntimeComparison(exactResult: ExactResultPayload): {
+  label: string;
+  value: string;
+  note: string | null;
+} {
+  const approxLatency = Math.max(exactResult.approx_latency_ms, 1);
+  const exactLatency = Math.max(exactResult.exact_latency_ms, 1);
+
+  if (exactLatency >= approxLatency) {
+    return {
+      label: "Speedup",
+      value: `${(exactLatency / approxLatency).toFixed(2)}x faster`,
+      note: null,
+    };
+  }
+
+  return {
+    label: "Runtime",
+    value: `${(approxLatency / exactLatency).toFixed(2)}x slower than exact`,
+    note: "Small or easy datasets can make the exact DuckDB query faster than the current sampler.",
+  };
+}
+
+function buildGraphPath(points: Array<{ x: number; y: number }>): string {
+  if (points.length === 0) {
+    return "";
+  }
+
+  if (points.length === 1) {
+    const point = points[0];
+    const stubStartX = roundGraphCoordinate(Math.max(28, point.x - 22));
+    return `M ${stubStartX} ${point.y} L ${point.x} ${point.y}`;
+  }
+
+  let path = `M ${points[0].x} ${points[0].y}`;
+
+  for (let index = 1; index < points.length; index += 1) {
+    const previousPoint = points[index - 1];
+    const point = points[index];
+    const controlX = roundGraphCoordinate((previousPoint.x + point.x) / 2);
+    path += ` C ${controlX} ${previousPoint.y}, ${controlX} ${point.y}, ${point.x} ${point.y}`;
+  }
+
+  return path;
+}
+
+function roundGraphCoordinate(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function deriveGraphCeiling(
+  firstErrorPct: number,
+  targetErrorPct: number | null,
+): number {
+  const baseline = Math.max(
+    25,
+    firstErrorPct * 2,
+    (targetErrorPct ?? 5) * 3,
+  );
+  return Math.ceil(baseline / 5) * 5;
 }

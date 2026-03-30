@@ -12,6 +12,8 @@ from typing import Any, Iterable, Mapping, Sequence
 from uuid import uuid4
 from xml.etree import ElementTree
 
+import duckdb
+
 from app.schemas.dataset import DatasetField, DatasetSummary
 from app.services.datasets.catalog import register_dataset
 
@@ -354,6 +356,9 @@ def _materialize_dataset(
 
             for profiler, value in zip(profilers, row, strict=False):
                 profiler.observe(value)
+
+    if row_count > 1:
+        _shuffle_csv_file(output_path)
 
     schema_fields = [
         DatasetField(
@@ -714,3 +719,21 @@ def _has_repeated_tag_group(elements: Sequence[ElementTree.Element]) -> bool:
 def _quote_sqlite_identifier(value: str) -> str:
     escaped = value.replace('"', '""')
     return f'"{escaped}"'
+
+
+def _shuffle_csv_file(path: Path) -> None:
+    shuffled_path = path.with_name(f"{path.stem}_shuffled.csv")
+    source_path = str(path).replace("\\", "/").replace("'", "''")
+    target_path = str(shuffled_path).replace("\\", "/").replace("'", "''")
+    connection = duckdb.connect(database=":memory:")
+    try:
+        connection.execute(
+            "COPY ("
+            f"SELECT * FROM read_csv_auto('{source_path}', header = TRUE) "
+            "ORDER BY random()"
+            f") TO '{target_path}' (HEADER, DELIMITER ',')"
+        )
+    finally:
+        connection.close()
+
+    shuffled_path.replace(path)

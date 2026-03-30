@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest.mock import patch
 
 from app.core.config import get_settings
 from app.schemas.query import CreateQuerySessionRequest
 from app.services.approx.adaptive_sampling import run_adaptive_sampling
 from app.services.datasets.catalog import get_dataset
+from app.services.exact.duckdb_runner import ProjectionBatch
 from app.services.planner.parser import parse_adaptive_query
 from app.services.planner.validator import validate_adaptive_query
 from app.services.sessions.manager import create_query_session
@@ -74,6 +76,54 @@ class AdaptiveStreamingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertGreaterEqual(len(result.snapshots), 2)
         self.assertGreater(result.snapshots[-1].sample_rows, result.snapshots[0].sample_rows)
+
+    @patch("app.services.approx.adaptive_sampling.stream_projection")
+    def test_adaptive_sampling_streams_projection_in_batches(
+        self, stream_projection_mock
+    ) -> None:
+        dataset = get_dataset("orders_v1")
+        assert dataset is not None
+
+        query = validate_adaptive_query(
+            parse_adaptive_query(
+                "SELECT SUM(total_amount) AS total_revenue FROM orders_v1;"
+            ),
+            dataset,
+        )
+        
+        class FakeProjectionStream:
+            def __init__(self) -> None:
+                self.fetch_calls = 0
+
+            def fetch(self, row_count: int) -> ProjectionBatch:
+                self.fetch_calls += 1
+                if self.fetch_calls == 1:
+                    return ProjectionBatch(
+                        column_names=("total_amount",),
+                        rows=[(100.0,), (120.0,), (90.0,), (110.0,)],
+                        #harscoded values exist so unit test can verify that adaptive sampling is fetching in batches
+                        latency_ms=1,
+                    )
+                return ProjectionBatch(
+                    column_names=("total_amount",),
+                    rows=[],
+                    latency_ms=1,
+                )
+
+        projection_stream = FakeProjectionStream()
+        stream_projection_mock.return_value.__enter__.return_value = projection_stream
+
+        run_adaptive_sampling(
+            dataset=dataset,
+            query=query,
+            target_error=0.05,
+            confidence_level=0.95,
+            seed_material="reservoir-sql-test",
+        )
+
+        projection_sql = stream_projection_mock.call_args.kwargs["projection_sql"]
+        self.assertEqual(projection_sql, query.projection_sql())
+        self.assertGreaterEqual(projection_stream.fetch_calls, 1)
 
     def _decode_event(self, encoded_event: str) -> dict:
         for line in encoded_event.splitlines():

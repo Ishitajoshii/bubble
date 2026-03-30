@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
 from math import sqrt
-from random import Random
 from statistics import NormalDist
 from time import perf_counter
 from typing import Literal
 
 from app.schemas.dataset import DatasetSummary
-from app.services.exact.duckdb_runner import fetch_projection
+from app.services.exact.duckdb_runner import stream_projection
 from app.services.planner.parser import AdaptiveAggregateQuery, FilterPredicate
 
 _INITIAL_BATCH_ROWS = 512
@@ -43,9 +41,7 @@ def run_adaptive_sampling(
     seed_material: str,
 ) -> AdaptiveSamplingResult:
     started_at = perf_counter()
-    projection = fetch_projection(dataset=dataset, projection_sql=query.projection_sql())
-    values, weights = _build_population_vectors(query=query, projection=projection)
-    total_rows = len(values)
+    total_rows = dataset.row_count
 
     if total_rows == 0:
         return AdaptiveSamplingResult(
@@ -68,56 +64,76 @@ def run_adaptive_sampling(
     )
     sample_cap_rows = max(1, sample_cap_rows)
 
-    rng = Random(_seed_from_text(seed_material))
-    sample_order = list(range(total_rows))
-    rng.shuffle(sample_order)
-
     z_value = NormalDist().inv_cdf((1 + confidence_level) / 2)
     sampled_values: list[float] = []
-    sampled_weights: list[int] | None = [] if weights is not None else None
+    sampled_weights: list[int] | None = [] if query.aggregate_function == "avg" else None
     snapshots: list[AdaptiveSamplingSnapshot] = []
 
     sample_rows = 0
     batch_rows = min(sample_cap_rows, _INITIAL_BATCH_ROWS)
+    sampling_sql = query.projection_sql()
 
-    while sample_rows < sample_cap_rows:
-        next_rows = min(batch_rows, sample_cap_rows - sample_rows)
-        next_indices = sample_order[sample_rows : sample_rows + next_rows]
-        sample_rows += next_rows
-        sampled_values.extend(values[index] for index in next_indices)
+    with stream_projection(dataset=dataset, projection_sql=sampling_sql) as projection_stream:
+        while sample_rows < sample_cap_rows:
+            next_rows = min(batch_rows, sample_cap_rows - sample_rows)
+            projection_batch = projection_stream.fetch(next_rows)
+            if len(projection_batch.rows) == 0:
+                if sample_rows == 0:
+                    return AdaptiveSamplingResult(
+                        snapshots=[
+                            AdaptiveSamplingSnapshot(
+                                iteration=1,
+                                estimate=0.0,
+                                relative_error=0.0,
+                                sample_rows=0,
+                                total_rows=total_rows,
+                                elapsed_ms=max(1, int((perf_counter() - started_at) * 1000)),
+                            )
+                        ],
+                        stopped_reason="target_reached",
+                    )
+                break
 
-        if sampled_weights is not None and weights is not None:
-            sampled_weights.extend(weights[index] for index in next_indices)
+            values, weights = _build_population_vectors(
+                query=query, projection=projection_batch
+            )
+            sampled_values.extend(values)
+            if sampled_weights is not None and weights is not None:
+                sampled_weights.extend(weights)
 
-        estimate, relative_error = _estimate_with_error(
-            aggregate_function=query.aggregate_function,
-            sampled_values=sampled_values,
-            sampled_weights=sampled_weights,
-            total_rows=total_rows,
-            z_value=z_value,
-        )
-        snapshots.append(
-            AdaptiveSamplingSnapshot(
-                iteration=len(snapshots) + 1,
-                estimate=estimate,
-                relative_error=relative_error,
-                sample_rows=sample_rows,
+            sample_rows += len(values)
+            estimate, relative_error = _estimate_with_error(
+                aggregate_function=query.aggregate_function,
+                sampled_values=sampled_values,
+                sampled_weights=sampled_weights,
                 total_rows=total_rows,
-                elapsed_ms=max(1, int((perf_counter() - started_at) * 1000)),
+                z_value=z_value,
             )
-        )
-
-        if relative_error <= target_error:
-            return AdaptiveSamplingResult(
-                snapshots=snapshots,
-                stopped_reason="target_reached",
+            snapshots.append(
+                AdaptiveSamplingSnapshot(
+                    iteration=len(snapshots) + 1,
+                    estimate=estimate,
+                    relative_error=relative_error,
+                    sample_rows=sample_rows,
+                    total_rows=total_rows,
+                    elapsed_ms=projection_batch.latency_ms,
+                )
             )
 
-        if sample_rows >= sample_cap_rows:
-            break
+            if relative_error <= target_error:
+                return AdaptiveSamplingResult(
+                    snapshots=snapshots,
+                    stopped_reason="target_reached",
+                )
 
-        next_total = min(sample_cap_rows, max(sample_rows + _INITIAL_BATCH_ROWS, int(sample_rows * _BATCH_GROWTH_FACTOR)))
-        batch_rows = max(1, next_total - sample_rows)
+            if sample_rows >= sample_cap_rows:
+                break
+
+            next_total = min(
+                sample_cap_rows,
+                max(sample_rows + _INITIAL_BATCH_ROWS, int(sample_rows * _BATCH_GROWTH_FACTOR)),
+            )
+            batch_rows = max(1, next_total - sample_rows)
 
     return AdaptiveSamplingResult(
         snapshots=snapshots,
@@ -308,7 +324,3 @@ def _relative_error(*, estimate: float, margin: float) -> float:
         return 1.0
 
     return margin / absolute_estimate
-
-
-def _seed_from_text(value: str) -> int:
-    return int.from_bytes(sha256(value.encode("utf-8")).digest()[:8], byteorder="big")
