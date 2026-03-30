@@ -1,0 +1,1 @@
+"""SwiftQuery API package."""
