@@ -1,7 +1,7 @@
 data/generated/
+.env
 data/raw/
 data/manifests/
-.env
 **/__pycache__/
 apps/api/.venv/
 apps/api/*.log
