@@ -7,8 +7,8 @@ from typing import Literal
 
 from app.schemas.dataset import DatasetSummary
 from app.services.approx.adaptive_sampling import (
+    _SampleAccumulator,
     _estimate_with_error,
-    _row_matches_filters,
 )
 from app.services.exact.duckdb_runner import GroupPopulation, ProjectionBatch, stream_projection
 from app.services.planner.parser import AdaptiveAggregateQuery
@@ -48,9 +48,7 @@ class StratifiedSamplingResult:
 class _StratumAccumulator:
     group_value: object
     population_rows: int
-    sampled_values: list[float] = field(default_factory=list)
-    sampled_weights: list[int] | None = None
-    sample_rows: int = 0
+    accumulator: _SampleAccumulator = field(default_factory=_SampleAccumulator)
     estimate: float = 0.0
     relative_error: float = 1.0
 
@@ -67,7 +65,7 @@ def run_stratified_sampling(
         raise ValueError("Stratified sampling requires a grouped aggregate query.")
 
     started_at = perf_counter()
-    total_rows = dataset.row_count
+    total_rows = sum(group.population_rows for group in group_populations)
 
     if total_rows == 0 or len(group_populations) == 0:
         return StratifiedSamplingResult(
@@ -98,7 +96,6 @@ def run_stratified_sampling(
         group_population.group_value: _StratumAccumulator(
             group_value=group_population.group_value,
             population_rows=group_population.population_rows,
-            sampled_weights=[] if query.aggregate_function == "avg" else None,
         )
         for group_population in group_populations
     }
@@ -184,13 +181,6 @@ def _accumulate_projection_rows(
     )
 
     for row in projection_batch.rows:
-        if not _row_matches_filters(
-            row=row,
-            query=query,
-            column_positions=column_positions,
-        ):
-            continue
-
         state = states.get(row[group_position])
         if state is None:
             continue
@@ -200,16 +190,17 @@ def _accumulate_projection_rows(
             aggregate_value = row[aggregate_position]
 
         if query.aggregate_function == "count":
-            state.sampled_values.append(1.0)
+            state.accumulator.add(value=1.0)
         elif query.aggregate_function == "sum":
-            state.sampled_values.append(0.0 if aggregate_value is None else float(aggregate_value))
+            state.accumulator.add(
+                value=0.0 if aggregate_value is None else float(aggregate_value)
+            )
         else:
             include_row = aggregate_value is not None
-            state.sampled_values.append(float(aggregate_value) if include_row else 0.0)
-            if state.sampled_weights is not None:
-                state.sampled_weights.append(1 if include_row else 0)
-
-        state.sample_rows += 1
+            state.accumulator.add(
+                value=float(aggregate_value) if include_row else 0.0,
+                weight=1.0 if include_row else 0.0,
+            )
 
 
 def _refresh_estimates(
@@ -221,8 +212,7 @@ def _refresh_estimates(
     for state in states:
         state.estimate, state.relative_error = _estimate_with_error(
             aggregate_function=aggregate_function,
-            sampled_values=state.sampled_values,
-            sampled_weights=state.sampled_weights,
+            accumulator=state.accumulator,
             total_rows=state.population_rows,
             z_value=z_value,
         )
@@ -241,7 +231,7 @@ def _build_snapshot(
             group_value=state.group_value,
             estimate=state.estimate,
             relative_error=state.relative_error,
-            sample_rows=state.sample_rows,
+            sample_rows=state.accumulator.sample_rows,
             population_rows=state.population_rows,
         )
         for state in states
