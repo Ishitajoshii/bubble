@@ -1,6 +1,6 @@
-# SwiftQuery
+# Bubble
 
-SwiftQuery is a small full-stack demo for prompt-to-SQL query sessions with:
+Bubble is a small full-stack demo for prompt-to-SQL query sessions with:
 
 - a React frontend
 - a FastAPI backend
