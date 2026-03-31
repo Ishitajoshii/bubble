@@ -43,6 +43,17 @@ function smoothPath(coords: Coord[]): string {
   return path;
 }
 
+function tracedPath(coords: Coord[]): string {
+  if (coords.length === 0) return "";
+  if (coords.length === 1) return `M ${coords[0].x} ${coords[0].y}`;
+  let path = `M ${coords[0].x} ${coords[0].y}`;
+  for (let index = 1; index < coords.length; index += 1) {
+    const current = coords[index];
+    path += ` L ${current.x} ${current.y}`;
+  }
+  return path;
+}
+
 export default function ConvergenceGraph({
   points,
   targetError,
@@ -58,10 +69,12 @@ export default function ConvergenceGraph({
   const rafRef = useRef<number | null>(null);
   const bubbleTargetRef = useRef<Coord>({ x: PAD.left, y: H - PAD.bottom });
   const bubbleCurrentRef = useRef<Coord>({ x: PAD.left, y: H - PAD.bottom });
+  const bubbleTrailRef = useRef<Coord[]>([]);
   const pathTargetRef = useRef<Coord[]>([]);
   const pathCurrentRef = useRef<Coord[]>([]);
 
   const [bubblePosition, setBubblePosition] = useState<Coord>(bubbleCurrentRef.current);
+  const [bubbleTrailCoords, setBubbleTrailCoords] = useState<Coord[]>([]);
   const [pathCoords, setPathCoords] = useState<Coord[]>([]);
   const [hovered, setHovered] = useState<HoveredState | null>(null);
 
@@ -105,7 +118,9 @@ export default function ConvergenceGraph({
       const origin = { x: sx(0), y: sy(maxError * 0.7) };
       bubbleTargetRef.current = origin;
       bubbleCurrentRef.current = origin;
+      bubbleTrailRef.current = [];
       setBubblePosition(origin);
+      setBubbleTrailCoords([]);
       pathCurrentRef.current = [];
       setPathCoords([]);
     }
@@ -119,10 +134,24 @@ export default function ConvergenceGraph({
       const cy = bubbleCurrentRef.current.y;
       const nx = lerp(cx, tx, LERP_SPEED);
       const ny = lerp(cy, ty, LERP_SPEED);
+      let trailMoved = false;
 
       if (Math.abs(nx - cx) > 0.05 || Math.abs(ny - cy) > 0.05) {
-        bubbleCurrentRef.current = { x: nx, y: ny };
-        setBubblePosition({ x: nx, y: ny });
+        const nextPosition = { x: nx, y: ny };
+        bubbleCurrentRef.current = nextPosition;
+        setBubblePosition(nextPosition);
+
+        const trail = bubbleTrailRef.current;
+        if (trail.length === 0) {
+          trail.push({ x: cx, y: cy });
+          trailMoved = true;
+        }
+
+        const lastTrailPoint = trail[trail.length - 1];
+        if (!lastTrailPoint || Math.hypot(nextPosition.x - lastTrailPoint.x, nextPosition.y - lastTrailPoint.y) >= 1.1) {
+          trail.push(nextPosition);
+          trailMoved = true;
+        }
       }
 
       const targetCoords = pathTargetRef.current;
@@ -154,6 +183,10 @@ export default function ConvergenceGraph({
         if (moved) {
           setPathCoords([...currentCoords]);
         }
+      }
+
+      if (trailMoved) {
+        setBubbleTrailCoords([...bubbleTrailRef.current]);
       }
 
       rafRef.current = requestAnimationFrame(frame);
@@ -197,6 +230,7 @@ export default function ConvergenceGraph({
   const yTicks = [0, maxError * 0.25, maxError * 0.5, maxError * 0.75, maxError];
   const xTicks = [0, 25, 50, 75, 100];
   const smoothedPath = smoothPath(pathCoords);
+  const bubbleTrailPath = tracedPath(bubbleTrailCoords);
   const currentPoint = points[points.length - 1] ?? null;
   const targetMilestones = targetThresholds.map((threshold) => ({
     threshold,
@@ -338,7 +372,7 @@ export default function ConvergenceGraph({
               stroke="#ffffff"
               strokeWidth="6"
               strokeLinecap="round"
-              opacity="0.55"
+              opacity="0.18"
               filter="url(#bubble-line-glow)"
             />
           )}
@@ -347,9 +381,33 @@ export default function ConvergenceGraph({
               d={smoothedPath}
               fill="none"
               stroke="#ffffff"
-              strokeWidth="2"
+              strokeWidth="1.35"
               strokeLinecap="round"
               strokeLinejoin="round"
+              opacity="0.36"
+            />
+          )}
+          {bubbleTrailPath && (
+            <path
+              d={bubbleTrailPath}
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="0.34"
+              filter="url(#bubble-line-glow)"
+            />
+          )}
+          {bubbleTrailPath && (
+            <path
+              d={bubbleTrailPath}
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="1"
             />
           )}
 
