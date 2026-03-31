@@ -10,3 +10,4 @@ apps/api/*.log
 apps/web/*.log
 apps/web/node_modules/
 apps/web/dist/
+package-lock.json

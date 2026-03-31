@@ -20,7 +20,7 @@ Response:
 ```json
 {
   "status": "ok",
-  "service": "swiftquery-api"
+  "service": "bubble-api"
 }
 ```
 

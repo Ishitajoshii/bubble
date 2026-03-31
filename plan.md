@@ -1,8 +1,8 @@
-# SwiftQuery v1 — Web App Plan
+# Bubble v1 — Web App Plan
 
 ## Summary
 
-Build SwiftQuery as a single hosted web app where users type a natural-language prompt and receive a fast approximate answer first; the exact result arrives later for comparison. The product should remain explainable and visibly adaptive (prompt→SQL, validation, planner routing, progressive approximation updates, and DuckDB benchmarking).
+Build Bubble as a single hosted web app where users type a natural-language prompt and receive a fast approximate answer first; the exact result arrives later for comparison. The product should remain explainable and visibly adaptive (prompt→SQL, validation, planner routing, progressive approximation updates, and DuckDB benchmarking).
 
 Live mode is a secondary demo feature and must not reshape the core batch approximate-query pipeline.
 

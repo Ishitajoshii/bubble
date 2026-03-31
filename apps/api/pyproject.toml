@@ -1,13 +1,15 @@
 [project]
-name = "swiftquery-api"
+name = "bubble-api"
 version = "0.1.0"
-description = "FastAPI stub backend for SwiftQuery"
+description = "FastAPI stub backend for Bubble"
 requires-python = ">=3.11"
 dependencies = [
   "duckdb>=1.2,<2.0",
   "fastapi>=0.111,<1.0",
   "pydantic>=2.7,<3.0",
   "uvicorn[standard]>=0.30,<1.0",
+  "openai>=1.0,<2.0",
+  "python-dotenv>=1.0,<2.0",
 ]
 
 [build-system]
