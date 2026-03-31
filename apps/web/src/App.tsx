@@ -108,13 +108,6 @@ const NewChatIcon = () => (
   </svg>
 );
 
-const SearchIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
 const HistoryIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="1 4 1 10 7 10" />
@@ -410,16 +403,8 @@ function Sidebar({
       </div>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 5, padding: "0 10px" }}>
-        {[
+        {[ 
           { icon: <NewChatIcon />, label: "New Chat", action: onNew },
-          {
-            icon: <SearchIcon />,
-            label: "Search Chats",
-            action: () => {
-              historySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-              searchInputRef.current?.focus();
-            },
-          },
           {
             icon: <HistoryIcon />,
             label: "History",
@@ -467,9 +452,6 @@ function Sidebar({
             padding: "10px 12px",
           }}
         >
-          <span style={{ color: "#FB90B0", display: "flex", alignItems: "center" }}>
-            <SearchIcon />
-          </span>
           <input
             ref={searchInputRef}
             type="text"

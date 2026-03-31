@@ -454,15 +454,15 @@ export default function ConvergenceGraph({
         {hovered && hovered.point !== currentPoint && (
           <g>
             <circle cx={hovered.x} cy={hovered.y} r="4" fill="#1b1520" stroke="#A2E3F6" strokeWidth="1.5" />
-            <g transform={`translate(${Math.min(hovered.x + 14, W - PAD.right - 138)},${Math.max(hovered.y - 62, PAD.top)})`}>
-              <rect rx="8" ry="8" width="134" height="56" fill="#1b1520" stroke="rgba(251,144,176,0.22)" strokeWidth="1" opacity="0.97" />
-              <text x="11" y="17" fill="#7a6a85" fontSize="9" fontFamily="Aldrich">
+            <g transform={`translate(${Math.min(hovered.x + 14, W - PAD.right - 100)},${Math.max(hovered.y - 62, PAD.top)})`}>
+              <rect rx="8" ry="8" width="96" height="56" fill="#222222" stroke="rgba(251,144,176,0.22)" strokeWidth="1" opacity="0.97" />
+              <text x="10" y="17" fill="#ffffff" fontSize="9" fontFamily="Aldrich" fontWeight="400">
                 ITER {hovered.point.iteration}
               </text>
-              <text x="11" y="31" fill="#ffffff" fontSize="11" fontFamily="Aldrich">
+              <text x="10" y="31" fill="#ffffff" fontSize="10" fontFamily="Aldrich" fontWeight="400">
                 Error: {hovered.point.relative_error.toFixed(1)}%
               </text>
-              <text x="11" y="46" fill="#A2E3F6" fontSize="9" fontFamily="Aldrich">
+              <text x="10" y="46" fill="#ffffff" fontSize="8.5" fontFamily="Aldrich" fontWeight="400">
                 {hovered.point.elapsed_ms}ms | {hovered.point.data_scanned_pct.toFixed(1)}% scanned
               </text>
             </g>
@@ -491,7 +491,7 @@ export default function ConvergenceGraph({
               const pillY = bubblePosition.y - 42 - pillH;
               const accentColor = targetMet ? "#A2E3F6" : "#FB90B0";
               return (
-                <g filter="url(#bubble-line-glow)">
+                <g>
                   <rect
                     x={pillX}
                     y={pillY}
