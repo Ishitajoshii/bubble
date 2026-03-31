@@ -7,8 +7,8 @@ from time import perf_counter
 from typing import Literal
 
 from app.schemas.dataset import DatasetSummary
-from app.services.exact.duckdb_runner import stream_projection
-from app.services.planner.parser import AdaptiveAggregateQuery, FilterPredicate
+from app.services.exact.duckdb_runner import run_cached_exact_query, stream_projection
+from app.services.planner.parser import AdaptiveAggregateQuery
 
 _INITIAL_BATCH_ROWS = 512
 _BATCH_GROWTH_FACTOR = 1.75
@@ -32,6 +32,26 @@ class AdaptiveSamplingResult:
     stopped_reason: Literal["target_reached", "sample_cap"]
 
 
+@dataclass(slots=True)
+class _SampleAccumulator:
+    sample_rows: int = 0
+    sum_y: float = 0.0
+    sum_y_sq: float = 0.0
+    sum_x: float = 0.0
+    sum_x_sq: float = 0.0
+    sum_xy: float = 0.0
+
+    def add(self, *, value: float, weight: float | None = None) -> None:
+        self.sample_rows += 1
+        self.sum_y += value
+        self.sum_y_sq += value * value
+
+        if weight is not None:
+            self.sum_x += weight
+            self.sum_x_sq += weight * weight
+            self.sum_xy += value * weight
+
+
 def run_adaptive_sampling(
     *,
     dataset: DatasetSummary,
@@ -41,7 +61,18 @@ def run_adaptive_sampling(
     seed_material: str,
 ) -> AdaptiveSamplingResult:
     started_at = perf_counter()
-    total_rows = dataset.row_count
+    exact_count_result = _exact_count_fast_path(
+        dataset=dataset,
+        query=query,
+        started_at=started_at,
+    )
+    if exact_count_result is not None:
+        return exact_count_result
+
+    total_rows, population_latency_ms = _resolve_population_rows(
+        dataset=dataset,
+        query=query,
+    )
 
     if total_rows == 0:
         return AdaptiveSamplingResult(
@@ -52,7 +83,10 @@ def run_adaptive_sampling(
                     relative_error=0.0,
                     sample_rows=0,
                     total_rows=0,
-                    elapsed_ms=max(1, int((perf_counter() - started_at) * 1000)),
+                    elapsed_ms=max(
+                        population_latency_ms,
+                        int((perf_counter() - started_at) * 1000),
+                    ),
                 )
             ],
             stopped_reason="target_reached",
@@ -65,20 +99,18 @@ def run_adaptive_sampling(
     sample_cap_rows = max(1, sample_cap_rows)
 
     z_value = NormalDist().inv_cdf((1 + confidence_level) / 2)
-    sampled_values: list[float] = []
-    sampled_weights: list[int] | None = [] if query.aggregate_function == "avg" else None
+    accumulator = _SampleAccumulator()
     snapshots: list[AdaptiveSamplingSnapshot] = []
 
-    sample_rows = 0
     batch_rows = min(sample_cap_rows, _INITIAL_BATCH_ROWS)
     sampling_sql = query.projection_sql()
 
     with stream_projection(dataset=dataset, projection_sql=sampling_sql) as projection_stream:
-        while sample_rows < sample_cap_rows:
-            next_rows = min(batch_rows, sample_cap_rows - sample_rows)
+        while accumulator.sample_rows < sample_cap_rows:
+            next_rows = min(batch_rows, sample_cap_rows - accumulator.sample_rows)
             projection_batch = projection_stream.fetch(next_rows)
             if len(projection_batch.rows) == 0:
-                if sample_rows == 0:
+                if accumulator.sample_rows == 0:
                     return AdaptiveSamplingResult(
                         snapshots=[
                             AdaptiveSamplingSnapshot(
@@ -87,25 +119,24 @@ def run_adaptive_sampling(
                                 relative_error=0.0,
                                 sample_rows=0,
                                 total_rows=total_rows,
-                                elapsed_ms=max(1, int((perf_counter() - started_at) * 1000)),
+                                elapsed_ms=max(
+                                    population_latency_ms,
+                                    int((perf_counter() - started_at) * 1000),
+                                ),
                             )
                         ],
                         stopped_reason="target_reached",
                     )
                 break
 
-            values, weights = _build_population_vectors(
-                query=query, projection=projection_batch
+            _accumulate_projection_rows(
+                query=query,
+                projection=projection_batch,
+                accumulator=accumulator,
             )
-            sampled_values.extend(values)
-            if sampled_weights is not None and weights is not None:
-                sampled_weights.extend(weights)
-
-            sample_rows += len(values)
             estimate, relative_error = _estimate_with_error(
                 aggregate_function=query.aggregate_function,
-                sampled_values=sampled_values,
-                sampled_weights=sampled_weights,
+                accumulator=accumulator,
                 total_rows=total_rows,
                 z_value=z_value,
             )
@@ -114,9 +145,9 @@ def run_adaptive_sampling(
                     iteration=len(snapshots) + 1,
                     estimate=estimate,
                     relative_error=relative_error,
-                    sample_rows=sample_rows,
+                    sample_rows=accumulator.sample_rows,
                     total_rows=total_rows,
-                    elapsed_ms=projection_batch.latency_ms,
+                    elapsed_ms=population_latency_ms + projection_batch.latency_ms,
                 )
             )
 
@@ -126,14 +157,17 @@ def run_adaptive_sampling(
                     stopped_reason="target_reached",
                 )
 
-            if sample_rows >= sample_cap_rows:
+            if accumulator.sample_rows >= sample_cap_rows:
                 break
 
             next_total = min(
                 sample_cap_rows,
-                max(sample_rows + _INITIAL_BATCH_ROWS, int(sample_rows * _BATCH_GROWTH_FACTOR)),
+                max(
+                    accumulator.sample_rows + _INITIAL_BATCH_ROWS,
+                    int(accumulator.sample_rows * _BATCH_GROWTH_FACTOR),
+                ),
             )
-            batch_rows = max(1, next_total - sample_rows)
+            batch_rows = max(1, next_total - accumulator.sample_rows)
 
     return AdaptiveSamplingResult(
         snapshots=snapshots,
@@ -141,112 +175,68 @@ def run_adaptive_sampling(
     )
 
 
-def _build_population_vectors(
-    *, query: AdaptiveAggregateQuery, projection
-) -> tuple[list[float], list[int] | None]:
+def _accumulate_projection_rows(
+    *, query: AdaptiveAggregateQuery, projection, accumulator: _SampleAccumulator
+) -> None:
     column_positions = {
         column_name: index for index, column_name in enumerate(projection.column_names)
     }
-    values: list[float] = []
-    weights: list[int] | None = [] if query.aggregate_function == "avg" else None
+    aggregate_position = (
+        None if query.aggregate_column is None else column_positions[query.aggregate_column]
+    )
 
     for row in projection.rows:
-        matches_filters = _row_matches_filters(
-            row=row,
-            query=query,
-            column_positions=column_positions,
-        )
-
-        aggregate_value = None
-        if query.aggregate_column is not None:
-            aggregate_value = row[column_positions[query.aggregate_column]]
-
         if query.aggregate_function == "count":
-            include_row = matches_filters and (
-                query.aggregate_column is None or aggregate_value is not None
-            )
-            values.append(1.0 if include_row else 0.0)
-            continue
-
-        if query.aggregate_function == "sum":
-            if matches_filters and aggregate_value is not None:
-                values.append(float(aggregate_value))
+            if aggregate_position is None:
+                accumulator.add(value=1.0)
             else:
-                values.append(0.0)
+                aggregate_value = row[aggregate_position]
+                accumulator.add(value=1.0 if aggregate_value is not None else 0.0)
             continue
 
-        include_row = matches_filters and aggregate_value is not None
-        values.append(float(aggregate_value) if include_row else 0.0)
-        if weights is not None:
-            weights.append(1 if include_row else 0)
+        aggregate_value = row[aggregate_position] if aggregate_position is not None else None
+        if query.aggregate_function == "sum":
+            accumulator.add(
+                value=0.0 if aggregate_value is None else float(aggregate_value)
+            )
+            continue
 
-    return values, weights
-
-
-def _row_matches_filters(
-    *,
-    row: tuple[object, ...],
-    query: AdaptiveAggregateQuery,
-    column_positions: dict[str, int],
-) -> bool:
-    for predicate in query.filters:
-        row_value = row[column_positions[predicate.column]]
-        if not _apply_filter_predicate(row_value=row_value, predicate=predicate):
-            return False
-    return True
-
-
-def _apply_filter_predicate(*, row_value: object, predicate: FilterPredicate) -> bool:
-    if row_value is None:
-        return False
-
-    if predicate.operator == "=":
-        return row_value == predicate.value
-    if predicate.operator == "!=":
-        return row_value != predicate.value
-    if predicate.operator == "<":
-        return row_value < predicate.value
-    if predicate.operator == "<=":
-        return row_value <= predicate.value
-    if predicate.operator == ">":
-        return row_value > predicate.value
-    return row_value >= predicate.value
+        include_row = aggregate_value is not None
+        accumulator.add(
+            value=float(aggregate_value) if include_row else 0.0,
+            weight=1.0 if include_row else 0.0,
+        )
 
 
 def _estimate_with_error(
     *,
     aggregate_function: str,
-    sampled_values: list[float],
-    sampled_weights: list[int] | None,
+    accumulator: _SampleAccumulator,
     total_rows: int,
     z_value: float,
 ) -> tuple[float, float]:
     if aggregate_function in {"count", "sum"}:
         return _estimate_total(
-            sampled_values=sampled_values,
+            accumulator=accumulator,
             total_rows=total_rows,
             z_value=z_value,
         )
 
-    if sampled_weights is None:
-        raise ValueError("AVG estimation requires denominator weights.")
-
     return _estimate_average(
-        sampled_values=sampled_values,
-        sampled_weights=sampled_weights,
+        accumulator=accumulator,
         total_rows=total_rows,
         z_value=z_value,
     )
 
 
 def _estimate_total(
-    *, sampled_values: list[float], total_rows: int, z_value: float
+    *, accumulator: _SampleAccumulator, total_rows: int, z_value: float
 ) -> tuple[float, float]:
-    sample_rows = len(sampled_values)
+    sample_rows = accumulator.sample_rows
     if sample_rows == 0:
         return 0.0, 1.0
 
-    sample_mean = sum(sampled_values) / sample_rows
+    sample_mean = accumulator.sum_y / sample_rows
     estimate = total_rows * sample_mean
 
     if sample_rows == total_rows:
@@ -255,7 +245,11 @@ def _estimate_total(
     if sample_rows < 2:
         return estimate, 1.0
 
-    sample_variance = _sample_variance(sampled_values)
+    sample_variance = _sample_variance_from_totals(
+        sample_rows=sample_rows,
+        value_sum=accumulator.sum_y,
+        value_sum_sq=accumulator.sum_y_sq,
+    )
     standard_error = total_rows * sqrt(
         max(0.0, (1 - sample_rows / total_rows) * sample_variance / sample_rows)
     )
@@ -264,22 +258,21 @@ def _estimate_total(
 
 def _estimate_average(
     *,
-    sampled_values: list[float],
-    sampled_weights: list[int],
+    accumulator: _SampleAccumulator,
     total_rows: int,
     z_value: float,
 ) -> tuple[float, float]:
-    sample_rows = len(sampled_values)
+    sample_rows = accumulator.sample_rows
     if sample_rows == 0:
         return 0.0, 1.0
 
-    denominator = sum(sampled_weights)
+    denominator = accumulator.sum_x
     if denominator == 0:
         if sample_rows == total_rows:
             return 0.0, 0.0
         return 0.0, 1.0
 
-    estimate = sum(sampled_values) / denominator
+    estimate = accumulator.sum_y / denominator
 
     if sample_rows == total_rows:
         return estimate, 0.0
@@ -291,11 +284,12 @@ def _estimate_average(
     if mean_weight <= 0:
         return estimate, 1.0
 
-    residuals = [
-        value - (estimate * weight)
-        for value, weight in zip(sampled_values, sampled_weights, strict=False)
-    ]
-    residual_variance = _sample_variance(residuals)
+    residual_sum_sq = (
+        accumulator.sum_y_sq
+        - (2 * estimate * accumulator.sum_xy)
+        + (estimate * estimate * accumulator.sum_x_sq)
+    )
+    residual_variance = max(0.0, residual_sum_sq / (sample_rows - 1))
     standard_error = sqrt(
         max(
             0.0,
@@ -307,12 +301,70 @@ def _estimate_average(
     return estimate, _relative_error(estimate=estimate, margin=z_value * standard_error)
 
 
-def _sample_variance(values: list[float]) -> float:
-    if len(values) < 2:
+def _sample_variance_from_totals(
+    *, sample_rows: int, value_sum: float, value_sum_sq: float
+) -> float:
+    if sample_rows < 2:
         return 0.0
 
-    mean = sum(values) / len(values)
-    return sum((value - mean) ** 2 for value in values) / (len(values) - 1)
+    mean = value_sum / sample_rows
+    return max(
+        0.0,
+        (value_sum_sq - (sample_rows * mean * mean)) / (sample_rows - 1),
+    )
+
+
+def _resolve_population_rows(
+    *, dataset: DatasetSummary, query: AdaptiveAggregateQuery
+) -> tuple[int, int]:
+    if not query.filters:
+        return dataset.row_count, 0
+
+    result = run_cached_exact_query(dataset=dataset, sql=query.population_sql())
+    return max(0, int(round(result.value))), result.latency_ms
+
+
+def _exact_count_fast_path(
+    *,
+    dataset: DatasetSummary,
+    query: AdaptiveAggregateQuery,
+    started_at: float,
+) -> AdaptiveSamplingResult | None:
+    if query.aggregate_function != "count":
+        return None
+
+    if query.aggregate_column is None and not query.filters:
+        total_rows = dataset.row_count
+        return AdaptiveSamplingResult(
+            snapshots=[
+                AdaptiveSamplingSnapshot(
+                    iteration=1,
+                    estimate=float(total_rows),
+                    relative_error=0.0,
+                    sample_rows=0,
+                    total_rows=total_rows,
+                    elapsed_ms=max(1, int((perf_counter() - started_at) * 1000)),
+                )
+            ],
+            stopped_reason="target_reached",
+        )
+
+    result = run_cached_exact_query(dataset=dataset, sql=query.exact_sql())
+    exact_value = max(0.0, result.value)
+    total_rows = max(1, int(round(exact_value)))
+    return AdaptiveSamplingResult(
+        snapshots=[
+            AdaptiveSamplingSnapshot(
+                iteration=1,
+                estimate=exact_value,
+                relative_error=0.0,
+                sample_rows=total_rows,
+                total_rows=total_rows,
+                elapsed_ms=result.latency_ms,
+            )
+        ],
+        stopped_reason="target_reached",
+    )
 
 
 def _relative_error(*, estimate: float, margin: float) -> float:
