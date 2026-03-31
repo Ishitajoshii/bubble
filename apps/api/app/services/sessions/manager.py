@@ -108,8 +108,8 @@ def get_query_session(session_id: str) -> QuerySessionState | None:
     return _sessions.get(session_id)
 
 
-def list_query_history(limit: int = 50) -> list[QueryHistoryItem]:
-    return _history[:limit]
+def list_query_history() -> list[QueryHistoryItem]:
+    return _history.copy()
 
 
 def clear_query_sessions() -> None:

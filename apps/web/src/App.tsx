@@ -340,6 +340,21 @@ function Sidebar({
   datasetLabel: string;
 }) {
   const historySectionRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase();
+  const filteredHistory = useMemo(() => {
+    if (!normalizedSearchQuery) {
+      return history;
+    }
+
+    return history.filter((item) =>
+      [item.prompt, item.dataset_label, item.dataset_id].some((value) =>
+        value.toLocaleLowerCase().includes(normalizedSearchQuery),
+      ),
+    );
+  }, [history, normalizedSearchQuery]);
 
   const formatHistoryMeta = (item: QueryHistoryItem): string => {
     const modeLabel = item.live_mode ? "Live" : "Regular";
@@ -398,7 +413,14 @@ function Sidebar({
       <nav style={{ display: "flex", flexDirection: "column", gap: 5, padding: "0 10px" }}>
         {[
           { icon: <NewChatIcon />, label: "New Chat", action: onNew },
-          { icon: <SearchIcon />, label: "Search Chats", action: () => undefined },
+          {
+            icon: <SearchIcon />,
+            label: "Search Chats",
+            action: () => {
+              historySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              searchInputRef.current?.focus();
+            },
+          },
           {
             icon: <HistoryIcon />,
             label: "History",
@@ -434,16 +456,54 @@ function Sidebar({
         ))}
       </nav>
 
+      <div style={{ padding: "14px 20px 0" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            borderRadius: 12,
+            border: "1px solid rgba(251,144,176,0.18)",
+            background: "rgba(255,255,255,0.04)",
+            padding: "10px 12px",
+          }}
+        >
+          <span style={{ color: "#FB90B0", display: "flex", alignItems: "center" }}>
+            <SearchIcon />
+          </span>
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search history"
+            style={{
+              width: "100%",
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "#ffffff",
+              fontSize: 12,
+              fontFamily: "'Aldrich'",
+            }}
+          />
+        </div>
+      </div>
+
       <div ref={historySectionRef} style={{ padding: "18px 10px 0", flex: 1 }}>
         <div style={{ padding: "0 12px 8px", color: "#FB90B0", fontSize: 11, fontFamily: "'Aldrich'" }}>
-          Recent Queries
+          {normalizedSearchQuery ? `Search Results (${filteredHistory.length})` : "Recent Queries"}
         </div>
         {history.length === 0 ? (
           <div style={{ padding: "0 12px", color: "#7a6a85", fontSize: 11, lineHeight: 1.5, fontFamily: "'Aldrich'" }}>
             No history yet.
           </div>
+        ) : filteredHistory.length === 0 ? (
+          <div style={{ padding: "0 12px", color: "#7a6a85", fontSize: 11, lineHeight: 1.5, fontFamily: "'Aldrich'" }}>
+            No chats match &quot;{searchQuery.trim()}&quot;.
+          </div>
         ) : (
-          history.map((item) => (
+          filteredHistory.map((item) => (
             <button
               key={item.session_id}
               onClick={() => onHistory(item)}

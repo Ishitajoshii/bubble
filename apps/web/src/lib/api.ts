@@ -231,7 +231,7 @@ function writeMockHistory(items: QueryHistoryItem[]): void {
   try {
     window.localStorage.setItem(
       MOCK_HISTORY_STORAGE_KEY,
-      JSON.stringify(items.slice(0, 20)),
+      JSON.stringify(items),
     );
   } catch {
     // Ignore local history persistence failures in mock mode.
