@@ -479,19 +479,52 @@ export default function ConvergenceGraph({
               height={40}
               preserveAspectRatio="xMidYMid meet"
             />
-            <text
-              x={bubblePosition.x}
-              y={bubblePosition.y - 30}
-              textAnchor="middle"
-              fill={targetMet ? "#A2E3F6" : "#FB90B0"}
-              fontSize="11"
-              fontFamily="Aldrich"
-            >
-              {currentPoint?.relative_error.toFixed(1)}%
-            </text>
+            {currentPoint && (() => {
+              const scanPct = currentPoint.data_scanned_pct.toFixed(1);
+              const errPct = currentPoint.relative_error.toFixed(1);
+              const label = `${scanPct}% sc | ${errPct}% err`;
+              const charWidth = 6.2;
+              const pillPadX = 12;
+              const pillW = label.length * charWidth + pillPadX * 2;
+              const pillH = 22;
+              const pillX = bubblePosition.x - pillW / 2;
+              const pillY = bubblePosition.y - 42 - pillH;
+              const accentColor = targetMet ? "#A2E3F6" : "#FB90B0";
+              return (
+                <g filter="url(#bubble-line-glow)">
+                  <rect
+                    x={pillX}
+                    y={pillY}
+                    width={pillW}
+                    height={pillH}
+                    rx={pillH / 2}
+                    ry={pillH / 2}
+                    fill="#1b1520"
+                    stroke={accentColor}
+                    strokeWidth="1.5"
+                    opacity="0.98"
+                  />
+                  <text
+                    x={bubblePosition.x}
+                    y={pillY + pillH / 2 + 3.5}
+                    textAnchor="middle"
+                    fill="#ffffff"
+                    fontSize="9.5"
+                    fontWeight="600"
+                    fontFamily="Aldrich"
+                    style={{ letterSpacing: "0.2px" }}
+                  >
+                    <tspan fill={accentColor}>{scanPct}%</tspan>
+                    <tspan fill="#7a6a85" dx="4">|</tspan>
+                    <tspan fill={accentColor} dx="4">{errPct}%</tspan>
+                    <tspan fill="#7a6a85" dx="4">err</tspan>
+                  </text>
+                </g>
+              );
+            })()}
             {running && (
-              <text x={bubblePosition.x} y={bubblePosition.y + 30} textAnchor="middle" fill="#ffffff" fontSize="9" fontFamily="Aldrich">
-                scanning...
+              <text x={bubblePosition.x} y={bubblePosition.y + 30} textAnchor="middle" fill="#ffffff" opacity="0.8" fontSize="10" fontFamily="Aldrich" style={{ letterSpacing: "1px" }}>
+                SCANNING...
               </text>
             )}
           </g>
