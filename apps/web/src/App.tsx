@@ -246,11 +246,10 @@ function InputBar({
         style={{
           display: "flex",
           alignItems: "center",
-          background: "rgba(255,255,255,0.04)",
+          background: "#222222",
           border: "1.5px solid #FB90B0",
           borderRadius: 999,
           padding: 5,
-          boxShadow: "0 0 20px rgba(251,144,176,0.15)",
           gap: 7,
         }}
       >
@@ -762,18 +761,6 @@ function LandingView({
     >
       <div
         style={{
-          position: "absolute",
-          width: 320,
-          height: 320,
-          borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(162,227,246,0.1) 0%, transparent 70%)",
-          pointerEvents: "none",
-          animation: "glowPulse 4s ease-in-out infinite",
-        }}
-      />
-
-      <div
-        style={{
           animation: "floatBubble 5s ease-in-out infinite",
           marginBottom: 24,
           zIndex: 1,
@@ -803,7 +790,7 @@ function LandingView({
           flexDirection: "column",
           alignItems: "center",
           gap: 4,
-          marginBottom: 28,
+          marginBottom: 18,
           zIndex: 1,
           maxWidth: 620,
         }}
@@ -822,14 +809,14 @@ function LandingView({
             maxWidth: 620,
             display: "flex",
             justifyContent: "center",
-            marginBottom: 26,
+            marginBottom: 22,
             zIndex: 1,
           }}
         >
           <div
             style={{
               border: "1px solid rgba(251,144,176,0.16)",
-              background: "rgba(255,255,255,0.03)",
+              background: "#222222",
               borderRadius: 18,
               padding: "14px 16px",
               width: "100%",
@@ -853,9 +840,9 @@ function LandingView({
                   type="button"
                   onClick={() => onSubmit(prompt)}
                   style={{
-                    border: "1px solid rgba(162,227,246,0.24)",
-                    background: "rgba(162,227,246,0.06)",
-                    color: "#d9f4fb",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "#222222",
+                    color: "#ffffff",
                     borderRadius: 999,
                     padding: "7px 12px",
                     fontSize: 11,
@@ -863,6 +850,7 @@ function LandingView({
                     cursor: "pointer",
                     fontFamily: "'Aldrich'",
                     textAlign: "left",
+                    boxShadow: "none",
                   }}
                 >
                   {prompt}
