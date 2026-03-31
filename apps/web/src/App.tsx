@@ -398,7 +398,7 @@ function Sidebar({
       <nav style={{ display: "flex", flexDirection: "column", gap: 5, padding: "0 10px" }}>
         {[
           { icon: <NewChatIcon />, label: "New Chat", action: onNew },
-          { icon: <SearchIcon />, label: "Query Source", action: () => undefined },
+          { icon: <SearchIcon />, label: "Search Chats", action: () => undefined },
           {
             icon: <HistoryIcon />,
             label: "History",
