@@ -727,8 +727,6 @@ function LandingView({
   datasetDescription,
   backendStatus,
   examplePrompts,
-  capabilities,
-  schemaPreview,
 }: {
   onSubmit: (prompt: string) => void;
   onUploadDataset: (file: File) => Promise<void>;
@@ -740,8 +738,6 @@ function LandingView({
   datasetDescription: string;
   backendStatus: string;
   examplePrompts: string[];
-  capabilities: string[];
-  schemaPreview: Array<{ name: string; type: string; description: string }>;
 }) {
   const [input, setInput] = useState("");
   const [showSlider, setShowSlider] = useState(false);
@@ -821,14 +817,11 @@ function LandingView({
         <p style={{ color: "#7a6a85", fontSize: 10, fontFamily: "'Aldrich'" }}>{backendStatus}</p>
       </div>
 
-      {(examplePrompts.length > 0 || capabilities.length > 0 || schemaPreview.length > 0) && (
+      {examplePrompts.length > 0 && (
         <div
           style={{
             width: "100%",
             maxWidth: 760,
-            display: "grid",
-            gridTemplateColumns: "1.3fr 0.9fr",
-            gap: 14,
             marginBottom: 26,
             zIndex: 1,
           }}
@@ -866,63 +859,6 @@ function LandingView({
                   {prompt}
                 </button>
               ))}
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gap: 14 }}>
-            <div
-              style={{
-                border: "1px solid rgba(251,144,176,0.16)",
-                background: "rgba(255,255,255,0.03)",
-                borderRadius: 18,
-                padding: "16px 18px",
-              }}
-            >
-              <p style={{ color: "#ffffff", fontSize: 12, fontFamily: "'Aldrich'", marginBottom: 10 }}>
-                Capabilities
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {capabilities.map((capability) => (
-                  <span
-                    key={capability}
-                    style={{
-                      borderRadius: 999,
-                      padding: "4px 9px",
-                      background: "rgba(251,144,176,0.08)",
-                      color: "#FB90B0",
-                      fontSize: 10,
-                      fontFamily: "'Aldrich'",
-                    }}
-                  >
-                    {capability}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div
-              style={{
-                border: "1px solid rgba(251,144,176,0.16)",
-                background: "rgba(255,255,255,0.03)",
-                borderRadius: 18,
-                padding: "16px 18px",
-              }}
-            >
-              <p style={{ color: "#ffffff", fontSize: 12, fontFamily: "'Aldrich'", marginBottom: 10 }}>
-                Schema Preview
-              </p>
-              <div style={{ display: "grid", gap: 8 }}>
-                {schemaPreview.map((field) => (
-                  <div key={field.name} style={{ display: "grid", gap: 2 }}>
-                    <div style={{ color: "#A2E3F6", fontSize: 11, fontFamily: "'Aldrich'" }}>
-                      {field.name} <span style={{ color: "#7a6a85" }}>/ {field.type}</span>
-                    </div>
-                    <div style={{ color: "#8f8098", fontSize: 10, lineHeight: 1.4, fontFamily: "'Aldrich'" }}>
-                      {field.description}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -1164,12 +1100,6 @@ export default function App() {
   const datasetLabel = selectedDataset?.label ?? "Loading dataset";
   const datasetDescription = selectedDataset?.description ?? "The app is loading the backend dataset catalog.";
   const examplePrompts = selectedDataset?.example_prompts ?? [];
-  const capabilities = selectedDataset?.capabilities ?? [];
-  const schemaPreview = (selectedDataset?.schema ?? []).slice(0, 4).map((field) => ({
-    name: field.name,
-    type: field.type,
-    description: field.description,
-  }));
 
   useEffect(() => {
     let active = true;
@@ -1505,8 +1435,6 @@ export default function App() {
               datasetDescription={datasetDescription}
               backendStatus={backendStatus}
               examplePrompts={examplePrompts}
-              capabilities={capabilities}
-              schemaPreview={schemaPreview}
             />
           ) : (
             <ResultView
