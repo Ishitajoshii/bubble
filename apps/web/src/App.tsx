@@ -819,7 +819,9 @@ function LandingView({
         <div
           style={{
             width: "100%",
-            maxWidth: 760,
+            maxWidth: 620,
+            display: "flex",
+            justifyContent: "center",
             marginBottom: 26,
             zIndex: 1,
           }}
@@ -829,13 +831,22 @@ function LandingView({
               border: "1px solid rgba(251,144,176,0.16)",
               background: "rgba(255,255,255,0.03)",
               borderRadius: 18,
-              padding: "16px 18px",
+              padding: "14px 16px",
+              width: "100%",
             }}
           >
-            <p style={{ color: "#ffffff", fontSize: 12, fontFamily: "'Aldrich'", marginBottom: 10 }}>
+            <p
+              style={{
+                color: "#ffffff",
+                fontSize: 12,
+                fontFamily: "'Aldrich'",
+                marginBottom: 10,
+                textAlign: "center",
+              }}
+            >
               Example Queries
             </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
               {examplePrompts.map((prompt) => (
                 <button
                   key={prompt}
@@ -1396,8 +1407,18 @@ export default function App() {
           datasetLabel={datasetLabel}
         />
 
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-          <div style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 10, zIndex: 20 }}>
+        <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              padding: "16px 24px 12px",
+              borderBottom: "1px solid rgba(255,255,255,0.06)",
+              background: "#222222",
+              zIndex: 20,
+            }}
+          >
+            <div style={{ display: "flex", gap: 10 }}>
             {(["Live", "Regular"] as Mode[]).map((value) => (
               <button
                 key={value}
@@ -1419,6 +1440,7 @@ export default function App() {
                 {value}
               </button>
             ))}
+            </div>
           </div>
 
           {view === "landing" ? (
