@@ -1,5 +1,7 @@
 # Bubble
 
+Bubble can be visited on https://bubble-anti.vercel.app/
+
 Bubble is a small full-stack demo for prompt-to-SQL query sessions with:
 
 - a React frontend
