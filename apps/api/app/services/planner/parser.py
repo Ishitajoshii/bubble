@@ -67,15 +67,19 @@ class AdaptiveAggregateQuery:
 
         if self.aggregate_column is not None:
             projections.append(self.aggregate_column)
-
-        for predicate in self.filters:
-            if predicate.column not in projections:
-                projections.append(predicate.column)
-
-        if not projections:
+        elif self.aggregate_function == "count":
             projections.append("1 AS __row_marker")
 
-        return f"SELECT {', '.join(projections)} FROM {self.table_name}"
+        sql = f"SELECT {', '.join(projections)} FROM {self.table_name}"
+        if self.filters:
+            sql += " WHERE " + " AND ".join(predicate.to_sql() for predicate in self.filters)
+        return sql
+
+    def population_sql(self) -> str:
+        sql = f"SELECT COUNT(*) AS population_rows FROM {self.table_name}"
+        if self.filters:
+            sql += " WHERE " + " AND ".join(predicate.to_sql() for predicate in self.filters)
+        return sql + ";"
 
     def exact_sql(self) -> str:
         aggregate = self.aggregate_function.upper()
