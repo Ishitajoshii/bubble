@@ -56,6 +56,25 @@ class AdaptiveStreamingTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(approx_final["payload"]["estimate"], 0)
         self.assertFalse(exact_result["payload"]["display_value"].startswith("$"))
 
+    async def test_live_mode_uses_same_approx_pipeline(self) -> None:
+        session = await create_query_session(
+            CreateQuerySessionRequest(
+                prompt="How many delivered orders do we have?",
+                dataset_id="orders_v1",
+                live_mode=True,
+                error_tolerance=0.05,
+                confidence_level=0.95,
+            )
+        )
+
+        self.assertEqual(session.planner.strategy, "adaptive_sampling")
+
+        events = [self._decode_event(chunk) async for chunk in stream_session_events(session)]
+        event_types = [event["type"] for event in events]
+
+        self.assertIn("approx_final", event_types)
+        self.assertEqual(event_types[-1], "exact_result")
+
     def test_tight_sum_target_produces_multiple_snapshots(self) -> None:
         dataset = get_dataset("orders_v1")
         assert dataset is not None

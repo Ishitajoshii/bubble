@@ -1,10 +1,80 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+
 import "./App.css";
 import ConvergenceGraph from "./features/convergence-graph";
+import { createQuerySessionClient, type QuerySessionRun } from "./lib/api";
+import { formatDuration, formatInteger, formatPercent } from "./lib/format";
+import type {
+  AnyQuerySessionEvent,
+  ApproxFinalPayload,
+  ApproxProgressPayload,
+  DatasetSummary,
+  ExactResultPayload,
+  PlanReadyPayload,
+  QueryStrategy,
+  SqlGeneratedPayload,
+} from "./types/query";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SVG Assets
-// ─────────────────────────────────────────────────────────────────────────────
+const QUERY_CLIENT = createQuerySessionClient();
+const DEFAULT_CONFIDENCE_LEVEL = 0.95;
+
+type Mode = "Live" | "Regular";
+type AppView = "landing" | "bubble";
+
+interface PipelineStep {
+  id: string;
+  label: string;
+  status: "idle" | "active" | "done";
+}
+
+interface QueryResult {
+  sql: string;
+  strategy: string;
+  strategyReason: string;
+  target: string;
+  targetMet: boolean;
+  targetError: number;
+  confidence: number;
+  estimate: string;
+  relativeError: number;
+  elapsed: string;
+  dataScanned: string;
+  computeSaved: string;
+  sampleRows: string;
+  exactValue: string;
+  delta: string;
+  deltaPct: number;
+  speedup: string;
+  convergencePoints: Array<{
+    iteration: number;
+    data_scanned_pct: number;
+    relative_error: number;
+    elapsed_ms: number;
+  }>;
+}
+
+const INITIAL_STEPS: PipelineStep[] = [
+  { id: "sql", label: "SQL", status: "idle" },
+  { id: "plan", label: "Plan", status: "idle" },
+  { id: "approx", label: "Approx", status: "idle" },
+  { id: "exact", label: "Exact", status: "idle" },
+];
+
+const FALLBACK_HISTORY = [
+  "Total revenue by region last quarter",
+  "Count distinct users in Jan 2024",
+  "Average API response time today",
+  "Sum of orders by product category",
+  "Top 10 customers by spend",
+];
+
+const STRATEGY_LABELS: Record<QueryStrategy, string> = {
+  adaptive_sampling: "Adaptive Sampling",
+  stratified_sampling: "Stratified Sampling",
+  hyperloglog: "HyperLogLog",
+  reservoir_sampling: "Reservoir Sampling",
+  exact_fallback: "Exact Fallback",
+};
 
 const BubbleSmile = ({ size = 100 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 179 179" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -39,269 +109,224 @@ const BubbleSmall = ({ size = 32 }: { size?: number }) => (
   </svg>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Icons
-// ─────────────────────────────────────────────────────────────────────────────
-
 const NewChatIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    <line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
+    <line x1="12" y1="8" x2="12" y2="16" />
+    <line x1="8" y1="12" x2="16" y2="12" />
   </svg>
 );
 
 const SearchIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
 );
 
 const HistoryIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-4.95" />
+    <polyline points="1 4 1 10 7 10" />
+    <path d="M3.51 15a9 9 0 1 0 .49-4.95" />
     <polyline points="12 7 12 12 15 15" />
   </svg>
 );
 
 const PlusIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
   </svg>
 );
 
 const SendIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+    <line x1="22" y1="2" x2="11" y2="13" />
+    <polygon points="22 2 15 22 11 13 2 9 22 2" />
   </svg>
 );
 
-const UploadIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="16 16 12 12 8 16" /><line x1="12" y1="12" x2="12" y2="21" />
-    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-  </svg>
-);
-
-const DatasetIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-  </svg>
-);
-
-const SqlIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-  </svg>
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-
-type Mode = "Live" | "Regular";
-type AppView = "landing" | "bubble";
-
-interface PipelineStep {
-  id: string;
-  label: string;
-  status: "idle" | "active" | "done";
-}
-
-interface QueryResult {
-  sql: string;
-  strategy: string;
-  strategyReason: string;
-  target: string;
-  targetMet: boolean;
-  targetError: number;
-  confidence: number;
-  estimate: string;
-  relativeError: number;
-  elapsed: number;
-  dataScanned: number;
-  computeSaved: number;
-  sampleRows: number;
-  exactValue: string;
-  delta: string;
-  deltaPct: number;
-  speedup: number;
-  convergencePoints: { x: number; y: number }[];
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Simulated pipeline runner
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function runSimulatedPipeline(
-  prompt: string,
-  errorTolerance: number,
-  mode: Mode,
-  onStep: (step: string) => void,
-  onProgress: (pct: number, err: number) => void,
-): Promise<QueryResult> {
-  const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-  onStep("sql");
-  await delay(600);
-  onStep("plan");
-  await delay(500);
-  onStep("approx");
-
-  const points: { x: number; y: number }[] = [];
-  const iterations = mode === "Live" ? 8 : 12;
-  for (let i = 1; i <= iterations; i++) {
-    await delay(180 + Math.random() * 120);
-    const x = Math.round((i / iterations) * 100);
-    const y = Math.max(0.5, 35 * Math.exp(-i * 0.38) + (Math.random() - 0.5) * 4);
-    points.push({ x, y });
-    onProgress(x, y);
-    if (y < errorTolerance * 100 && i >= 4) break;
+function buildResult(args: {
+  sqlPayload: SqlGeneratedPayload | null;
+  planPayload: PlanReadyPayload | null;
+  approxPayload: ApproxProgressPayload | ApproxFinalPayload | null;
+  exactPayload: ExactResultPayload | null;
+  convergencePoints: QueryResult["convergencePoints"];
+  fallbackErrorTolerance: number;
+}): QueryResult | null {
+  const { sqlPayload, planPayload, approxPayload, exactPayload, convergencePoints, fallbackErrorTolerance } = args;
+  if (!sqlPayload && !planPayload && !approxPayload && !exactPayload) {
+    return null;
   }
 
-  onStep("exact");
-  await delay(800);
-  onStep("done");
+  const targetError = planPayload?.planner.target_error_pct ?? fallbackErrorTolerance * 100;
+  const confidence = (planPayload?.planner.confidence_level ?? DEFAULT_CONFIDENCE_LEVEL) * 100;
+  const targetSummary =
+    planPayload?.planner.target_summary ??
+    `Within ${targetError.toFixed(0)}% at ${confidence.toFixed(0)}% confidence`;
 
-  const lowerPrompt = prompt.toLowerCase();
-  const isRevenue = lowerPrompt.includes("revenue") || lowerPrompt.includes("sales") || lowerPrompt.includes("sum");
-  const isCount = lowerPrompt.includes("count") || lowerPrompt.includes("distinct");
-
-  const baseVal = isRevenue ? 124197 : isCount ? 48293 : 73841;
-  const exactVal = baseVal + Math.round((Math.random() - 0.5) * 8000);
-  const delta = exactVal - baseVal;
-  const finalErr = points[points.length - 1]?.y ?? 3.8;
-  const scanned = Math.round(15 + Math.random() * 20);
+  const scalarExact = exactPayload?.result_scope === "scalar" ? exactPayload : null;
+  const groupedExact = exactPayload?.result_scope === "grouped" ? exactPayload : null;
 
   return {
-    sql: isRevenue
-      ? "SELECT region, SUM(amount) AS total_sales FROM sales GROUP BY region;"
-      : isCount
-      ? "SELECT COUNT(DISTINCT user_id) FROM events WHERE event_date > '2024-01-01';"
-      : "SELECT AVG(response_time_ms) FROM api_logs WHERE status = 200;",
-    strategy: mode === "Live" ? "reservoir_sampling" : "adaptive_sampling",
-    strategyReason:
-      mode === "Live"
-        ? "Live window stream uses reservoir sampling for bounded memory"
-        : "Single-table aggregate without GROUP BY fits adaptive sampling",
-    target: `within ${errorTolerance * 100}% at ${Math.round(95)}% confidence`,
-    targetMet: finalErr < errorTolerance * 100,
-    targetError: errorTolerance * 100,
-    confidence: 95,
-    estimate: isRevenue ? `$${baseVal.toLocaleString()}` : baseVal.toLocaleString(),
-    relativeError: +finalErr.toFixed(1),
-    elapsed: 2.48,
-    dataScanned: scanned,
-    computeSaved: 100 - scanned,
-    sampleRows: 232799,
-    exactValue: isRevenue ? `$${exactVal.toLocaleString()}` : exactVal.toLocaleString(),
-    delta: `${Math.abs(delta)}`,
-    deltaPct: +(Math.abs(delta / exactVal) * 100).toFixed(1),
-    speedup: 4.48,
-    convergencePoints: points,
+    sql: sqlPayload?.sql ?? "Generating...",
+    strategy: planPayload ? STRATEGY_LABELS[planPayload.planner.strategy] : "Pending",
+    strategyReason: planPayload?.planner.rationale ?? "Waiting for planner rationale",
+    target: targetSummary,
+    targetMet: approxPayload?.target_met ?? false,
+    targetError,
+    confidence,
+    estimate:
+      approxPayload?.result_scope === "scalar"
+        ? approxPayload.display_value
+        : approxPayload
+          ? "Grouped result"
+          : "Pending",
+    relativeError: (approxPayload?.relative_error ?? groupedExact?.max_delta_pct ?? 0) * 100,
+    elapsed: formatDuration(
+      scalarExact?.approx_latency_ms ??
+        groupedExact?.approx_latency_ms ??
+        approxPayload?.elapsed_ms ??
+        0,
+    ),
+    dataScanned: formatPercent(approxPayload?.data_scanned_pct ?? 0, 1),
+    computeSaved: formatPercent(approxPayload?.compute_saved_pct ?? 0, 1),
+    sampleRows: formatInteger(approxPayload?.sample_rows ?? 0),
+    exactValue:
+      scalarExact?.display_value ??
+      (groupedExact ? `${groupedExact.group_count} groups` : "Pending"),
+    delta: formatInteger(
+      Math.abs(
+        scalarExact?.delta ??
+          groupedExact?.mean_delta_pct ??
+          0,
+      ),
+    ),
+    deltaPct: (scalarExact?.delta_pct ?? groupedExact?.mean_delta_pct ?? 0) * 100,
+    speedup:
+      scalarExact?.speedup || groupedExact?.speedup
+        ? `${(scalarExact?.speedup ?? groupedExact?.speedup ?? 0).toFixed(2)}x`
+        : "Pending",
+    convergencePoints,
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PlusMenu
-// ─────────────────────────────────────────────────────────────────────────────
-
-function PlusMenu({ onClose }: { onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
-
-  const items = [
-    { icon: <UploadIcon />, label: "Upload File", desc: "CSV, Parquet, JSON" },
-    { icon: <DatasetIcon />, label: "Select Dataset", desc: "Built-in benchmark sets" },
-    { icon: <SqlIcon />, label: "Run Raw SQL", desc: "Advanced direct execution" },
-  ];
-
-  return (
-    <div ref={ref} style={{
-      position: "absolute", bottom: "calc(100% + 10px)", left: 0,
-      background: "rgba(28,20,33,0.97)", border: "1px solid rgba(251,144,176,0.25)",
-      borderRadius: 12, padding: "6px 0", minWidth: 220,
-      boxShadow: "0 8px 28px rgba(0,0,0,0.55)", zIndex: 200,
-      animation: "menuIn 0.18s cubic-bezier(.22,1,.36,1)",
-    }}>
-      {items.map((item) => (
-        <button key={item.label} onClick={onClose} style={{
-          display: "flex", alignItems: "center", gap: 10,
-          width: "100%", padding: "9px 14px",
-          background: "transparent", border: "none", cursor: "pointer",
-          color: "#ffffff", textAlign: "left", transition: "background 0.15s",
-          fontFamily: "'Aldrich'",
-        }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(251,144,176,0.1)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >
-          <span style={{ color: "#FB90B0", flexShrink: 0 }}>{item.icon}</span>
-          <span>
-            <div style={{ fontWeight: 600, fontSize: 12, letterSpacing: 0.2 }}>{item.label}</div>
-            <div style={{ fontSize: 10, color: "#7a6a85", marginTop: 1 }}>{item.desc}</div>
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// InputBar
-// ─────────────────────────────────────────────────────────────────────────────
-
 function InputBar({
-  value, onChange, onSubmit, placeholder = "Ask anything", disabled = false,
+  value,
+  onChange,
+  onSubmit,
+  onUploadDataset,
+  uploadInProgress = false,
+  placeholder = "Ask anything",
+  disabled = false,
 }: {
-  value: string; onChange: (v: string) => void; onSubmit: () => void;
-  placeholder?: string; disabled?: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onUploadDataset: (file: File) => Promise<void>;
+  uploadInProgress?: boolean;
+  placeholder?: string;
+  disabled?: boolean;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    await onUploadDataset(file);
+  };
 
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: 740 }}>
-      {menuOpen && <PlusMenu onClose={() => setMenuOpen(false)} />}
-      <div style={{
-        display: "flex", alignItems: "center",
-        background: "rgba(255,255,255,0.04)",
-        border: "1.5px solid #FB90B0", borderRadius: 999,
-        padding: "5px 5px 5px 5px",
-        boxShadow: "0 0 20px rgba(251,144,176,0.15)", gap: 7,
-      }}>
-        <button onClick={() => setMenuOpen((p) => !p)} style={{
-          width: 38, height: 38, borderRadius: "50%",
-          background: menuOpen ? "rgba(251,144,176,0.2)" : "transparent",
-          border: "1.5px solid #FB90B0", color: "#FB90B0",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          cursor: "pointer", flexShrink: 0, transition: "all 0.15s",
-        }}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.tsv,.json,.xml,.sqlite,.sqlite3,.db"
+        onChange={(event) => {
+          void handleFileChange(event);
+        }}
+        style={{ display: "none" }}
+      />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          background: "rgba(255,255,255,0.04)",
+          border: "1.5px solid #FB90B0",
+          borderRadius: 999,
+          padding: 5,
+          boxShadow: "0 0 20px rgba(251,144,176,0.15)",
+          gap: 7,
+        }}
+      >
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          type="button"
+          disabled={disabled || uploadInProgress}
+          title="Upload dataset"
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: "50%",
+            background: uploadInProgress ? "rgba(251,144,176,0.2)" : "transparent",
+            border: "1.5px solid #FB90B0",
+            color: "#FB90B0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: disabled || uploadInProgress ? "not-allowed" : "pointer",
+            flexShrink: 0,
+            opacity: disabled || uploadInProgress ? 0.55 : 1,
+          }}
+        >
           <PlusIcon />
         </button>
         <input
-          type="text" value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(); } }}
-          placeholder={placeholder} disabled={disabled}
+          type="text"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              onSubmit();
+            }
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
           style={{
-            flex: 1, background: "transparent", border: "none", outline: "none",
-            color: "#ffffff", fontSize: 14, fontFamily: "'Aldrich'",
-            caretColor: "#FB90B0", opacity: disabled ? 0.5 : 1,
+            flex: 1,
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: "#ffffff",
+            fontSize: 14,
+            fontFamily: "'Aldrich'",
+            caretColor: "#FB90B0",
+            opacity: disabled ? 0.5 : 1,
           }}
         />
         {value.trim() && !disabled && (
-          <button onClick={onSubmit} style={{
-            width: 38, height: 38, borderRadius: "50%",
-            background: "#FB90B0", border: "none", color: "#1a1320",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", flexShrink: 0, transition: "all 0.15s",
-          }}>
+          <button
+            onClick={onSubmit}
+            type="button"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: "50%",
+              background: "#FB90B0",
+              border: "none",
+              color: "#1a1320",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
             <SendIcon />
           </button>
         )}
@@ -310,72 +335,113 @@ function InputBar({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sidebar
-// ─────────────────────────────────────────────────────────────────────────────
-
-const MOCK_HISTORY = [
-  "Total revenue by region last quarter",
-  "Count distinct users in Jan 2024",
-  "Average API response time today",
-  "SUM of orders by product category",
-  "Top 10 customers by spend",
-  "Daily active users last 30 days",
-  "Median order value this week",
-  "Error rate by service endpoint",
-];
-
-function Sidebar({ onNew, onHistory }: { onNew: () => void; onHistory: (p: string) => void }) {
+function Sidebar({
+  onNew,
+  onHistory,
+  history,
+  datasetLabel,
+}: {
+  onNew: () => void;
+  onHistory: (prompt: string) => void;
+  history: string[];
+  datasetLabel: string;
+}) {
   return (
-    <aside style={{
-      width: 238, minWidth: 238,
-      background: "#222222",
-      borderRight: "1px solid rgba(255,255,255,0.06)",
-      display: "flex", flexDirection: "column",
-      padding: "30px 0 0 0", zIndex: 10, overflowY: "auto",
-    }}>
-      <div style={{ padding: "0 20px 24px" }}>
-        <span style={{
-          fontSize: 26, color: "#FB90B0", letterSpacing: 1, fontWeight: 200,
-          fontFamily: "'BD_Caramel'",
-          WebkitTextStroke: "0px",
-        }}>Bubble</span>
+    <aside
+      style={{
+        width: 238,
+        minWidth: 238,
+        background: "#222222",
+        borderRight: "1px solid rgba(255,255,255,0.06)",
+        display: "flex",
+        flexDirection: "column",
+        padding: "30px 0 0",
+        zIndex: 10,
+        overflowY: "auto",
+      }}
+    >
+      <div style={{ padding: "0 20px 12px" }}>
+        <span
+          style={{
+            fontSize: 26,
+            color: "#FB90B0",
+            letterSpacing: 1,
+            fontWeight: 200,
+            fontFamily: "'BD_Caramel'",
+          }}
+        >
+          Bubble
+        </span>
+      </div>
+
+      <div
+        style={{
+          margin: "0 20px 18px",
+          padding: "10px 12px",
+          borderRadius: 12,
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(251,144,176,0.12)",
+          fontFamily: "'Aldrich'",
+        }}
+      >
+        <div style={{ fontSize: 10, color: "#7a6a85", marginBottom: 4 }}>Dataset</div>
+        <div style={{ fontSize: 12, color: "#ffffff", lineHeight: 1.4 }}>{datasetLabel}</div>
       </div>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 5, padding: "0 10px" }}>
         {[
           { icon: <NewChatIcon />, label: "New Chat", action: onNew },
-          { icon: <SearchIcon />, label: "Search Chats", action: () => { } },
-          { icon: <HistoryIcon />, label: "History", action: () => { } },
+          { icon: <SearchIcon />, label: "Query Source", action: () => undefined },
+          { icon: <HistoryIcon />, label: "History", action: () => undefined },
         ].map(({ icon, label, action }) => (
-          <button key={label} onClick={action} style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "9px 12px", background: "rgba(255,255,255,0.04)",
-            border: "none", borderRadius: 9, color: "#ffffff",
-            cursor: "pointer", fontSize: 13, fontWeight: 500,
-            fontFamily: "'Aldrich'", transition: "all 0.15s", textAlign: "left",
-          }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(251,144,176,0.12)"; e.currentTarget.style.color = "#FB90B0"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "#ffffff"; }}
+          <button
+            key={label}
+            onClick={action}
+            type="button"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "9px 12px",
+              background: "rgba(255,255,255,0.04)",
+              border: "none",
+              borderRadius: 9,
+              color: "#ffffff",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 500,
+              fontFamily: "'Aldrich'",
+              textAlign: "left",
+            }}
           >
-            {icon}{label}
+            {icon}
+            {label}
           </button>
         ))}
       </nav>
 
       <div style={{ padding: "18px 10px 0", flex: 1 }}>
-        {MOCK_HISTORY.map((h) => (
-          <button key={h} onClick={() => onHistory(h)} style={{
-            display: "block", width: "100%", textAlign: "left",
-            padding: "7px 12px", background: "transparent",
-            border: "none", cursor: "pointer", color: "#7a6a85",
-            fontSize: 12, lineHeight: 1.45, transition: "color 0.15s",
-            fontFamily: "'Aldrich'", marginBottom: 2,
-          }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#7a6a85")}
+        {history.map((item) => (
+          <button
+            key={item}
+            onClick={() => onHistory(item)}
+            type="button"
+            style={{
+              display: "block",
+              width: "100%",
+              textAlign: "left",
+              padding: "7px 12px",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "#7a6a85",
+              fontSize: 12,
+              lineHeight: 1.45,
+              fontFamily: "'Aldrich'",
+              marginBottom: 2,
+            }}
           >
-            {h}
+            {item}
           </button>
         ))}
       </div>
@@ -383,100 +449,148 @@ function Sidebar({ onNew, onHistory }: { onNew: () => void; onHistory: (p: strin
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// StatusPanel (right column)
-// ─────────────────────────────────────────────────────────────────────────────
-
 function StatusPanel({
-  steps, result, streaming,
+  steps,
+  result,
+  streaming,
+  errorMessage,
 }: {
   steps: PipelineStep[];
   result: QueryResult | null;
   streaming: boolean;
+  errorMessage: string | null;
 }) {
-  const statusLabel = streaming ? "Result Generating" : result ? "Result Generated" : "Waiting for Prompt";
-
-  const dotStates = steps.filter((s) => s.id !== "done");
+  const statusLabel = errorMessage
+    ? "Query Failed"
+    : streaming
+      ? "Streaming Result"
+      : result
+        ? "Result Ready"
+        : "Waiting for Prompt";
 
   return (
-    <aside style={{
-      width: 240, minWidth: 240,
-      background: "#222222",
-      borderLeft: "1px solid rgba(255,255,255,0.06)",
-      display: "flex", flexDirection: "column",
-      padding: "20px 16px", overflowY: "auto", alignItems: "center",
-    }}>
+    <aside
+      style={{
+        width: 240,
+        minWidth: 240,
+        background: "#222222",
+        borderLeft: "1px solid rgba(255,255,255,0.06)",
+        display: "flex",
+        flexDirection: "column",
+        padding: "20px 16px",
+        overflowY: "auto",
+        alignItems: "center",
+      }}
+    >
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
-        <h3 style={{
-          fontSize: 16, fontWeight: 700, color: "#FB90B0",
-          marginBottom: 16, textDecoration: "underline",
-          fontFamily: "'Aldrich'",
-        }}>Status</h3>
+        <h3
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: "#FB90B0",
+            marginBottom: 16,
+            textDecoration: "underline",
+            fontFamily: "'Aldrich'",
+          }}
+        >
+          Status
+        </h3>
 
-        {/* Bubble avatar */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
           <div style={{ animation: "floatBubble 5s ease-in-out infinite" }}>
             <BubbleSmall size={72} />
           </div>
         </div>
 
-        {/* Status label */}
-        <p style={{
-          textAlign: "center", fontSize: 13, fontWeight: 600,
-          color: "#FB90B0", marginBottom: 14,
-          fontFamily: "'Aldrich'",
-        }}>
+        <p
+          style={{
+            textAlign: "center",
+            fontSize: 13,
+            fontWeight: 600,
+            color: errorMessage ? "#ffb4c9" : "#FB90B0",
+            marginBottom: 14,
+            fontFamily: "'Aldrich'",
+          }}
+        >
           {statusLabel}
         </p>
 
-        {/* Pipeline step dots */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginBottom: 20 }}>
-          {dotStates.map((s, i) => (
-            <div key={s.id} style={{ display: "flex", alignItems: "center" }}>
-              <div style={{
-                width: 14, height: 14, borderRadius: "50%",
-                border: `2px solid ${s.status === "idle" ? "rgba(162,227,246,0.4)" : "#A2E3F6"}`,
-                background: s.status === "done" ? "#A2E3F6" : s.status === "active" ? "rgba(162,227,246,0.5)" : "transparent",
-                transition: "all 0.3s",
-                boxShadow: s.status !== "idle" ? "0 0 6px rgba(162,227,246,0.5)" : "none",
-              }} />
-              {i < dotStates.length - 1 && (
-                <div style={{
-                  width: 28, height: 1.5,
-                  background: s.status === "done" ? "#A2E3F6" : "rgba(162,227,246,0.2)",
-                  borderTop: `1.5px dashed ${s.status === "done" ? "rgba(162,227,246,0.7)" : "rgba(162,227,246,0.25)"}`,
-                  margin: "0 1px",
-                }} />
+          {steps.map((step, index) => (
+            <div key={step.id} style={{ display: "flex", alignItems: "center" }}>
+              <div
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  border: `2px solid ${step.status === "idle" ? "rgba(162,227,246,0.4)" : "#A2E3F6"}`,
+                  background:
+                    step.status === "done"
+                      ? "#A2E3F6"
+                      : step.status === "active"
+                        ? "rgba(162,227,246,0.5)"
+                        : "transparent",
+                  boxShadow: step.status !== "idle" ? "0 0 6px rgba(162,227,246,0.5)" : "none",
+                }}
+              />
+              {index < steps.length - 1 && (
+                <div
+                  style={{
+                    width: 28,
+                    height: 1.5,
+                    background: step.status === "done" ? "#A2E3F6" : "rgba(162,227,246,0.2)",
+                    borderTop: `1.5px dashed ${step.status === "done" ? "rgba(162,227,246,0.7)" : "rgba(162,227,246,0.25)"}`,
+                    margin: "0 1px",
+                  }}
+                />
               )}
             </div>
           ))}
         </div>
 
-        {/* Result panels */}
+        {errorMessage && (
+          <div
+            style={{
+              width: "100%",
+              marginBottom: 16,
+              padding: "10px 12px",
+              borderRadius: 12,
+              background: "rgba(251,144,176,0.08)",
+              border: "1px solid rgba(251,144,176,0.2)",
+              color: "#ffd5e1",
+              fontSize: 11,
+              lineHeight: 1.5,
+              fontFamily: "'Aldrich'",
+            }}
+          >
+            {errorMessage}
+          </div>
+        )}
+
         {result && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
-            <ResultBlock title="Targets Met">
-              <MetricRow label="Target Error" value={`${result.targetError}%`} />
-              <MetricRow label="Confidence" value={`${result.confidence}%`} />
-              <MetricRow label="Status" value={result.targetMet ? "Achieved" : "Not Met"} highlight={result.targetMet} />
+            <ResultBlock title="Targets">
+              <MetricRow label="Target Error" value={formatPercent(result.targetError, 1)} />
+              <MetricRow label="Confidence" value={formatPercent(result.confidence, 0)} />
+              <MetricRow label="Status" value={result.targetMet ? "Achieved" : "In Progress"} highlight={result.targetMet} />
             </ResultBlock>
 
-            <ResultBlock title="Approximate Result">
+            <ResultBlock title="Approximate">
               <MetricRow label="Estimate" value={result.estimate} />
-              <MetricRow label="Relative Error" value={`${result.relativeError}%`} />
-              <MetricRow label="Elapsed" value={`${result.elapsed}s`} />
+              <MetricRow label="Relative Error" value={formatPercent(result.relativeError, 1)} />
+              <MetricRow label="Elapsed" value={result.elapsed} />
             </ResultBlock>
 
-            <ResultBlock title="Scanned vs Saved">
-              <MetricRow label="Data Scanned" value={`${result.dataScanned}%`} />
-              <MetricRow label="Compute Saved" value={`${result.computeSaved}%`} />
-              <MetricRow label="Sample Rows" value={result.sampleRows.toLocaleString()} />
+            <ResultBlock title="Scanned">
+              <MetricRow label="Data Scanned" value={result.dataScanned} />
+              <MetricRow label="Compute Saved" value={result.computeSaved} />
+              <MetricRow label="Sample Rows" value={result.sampleRows} />
             </ResultBlock>
 
-            <ResultBlock title="Exact Result">
+            <ResultBlock title="Exact">
               <MetricRow label="Exact Value" value={result.exactValue} />
-              <MetricRow label="Delta" value={`${result.delta} · ${result.deltaPct}%`} />
-              <MetricRow label="Speedup" value={`${result.speedup}x`} />
+              <MetricRow label="Delta" value={`${result.delta} | ${formatPercent(result.deltaPct, 1)}`} />
+              <MetricRow label="Speedup" value={result.speedup} />
             </ResultBlock>
           </div>
         )}
@@ -488,9 +602,7 @@ function StatusPanel({
 function ResultBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p style={{ fontSize: 12, fontWeight: 700, color: "#ffffff", marginBottom: 6, fontFamily: "'Aldrich'" }}>
-        {title}
-      </p>
+      <p style={{ fontSize: 12, fontWeight: 700, color: "#ffffff", marginBottom: 6, fontFamily: "'Aldrich'" }}>{title}</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>{children}</div>
     </div>
   );
@@ -500,37 +612,60 @@ function MetricRow({ label, value, highlight = false }: { label: string; value: 
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
       <span style={{ fontSize: 11, color: "#7a6a85", fontFamily: "'Aldrich'" }}>{label}:</span>
-      <span style={{ fontSize: 11, color: highlight ? "#A2E3F6" : "#ffffff", fontWeight: 500, fontFamily: "'Aldrich'", textAlign: "right" }}>
+      <span
+        style={{
+          fontSize: 11,
+          color: highlight ? "#A2E3F6" : "#ffffff",
+          fontWeight: 500,
+          fontFamily: "'Aldrich'",
+          textAlign: "right",
+        }}
+      >
         {value}
       </span>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Regular Mode — error % slider popup above input
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ErrorSlider({ value, onChange, onClose }: { value: number; onChange: (v: number) => void; onClose: () => void }) {
+function ErrorSlider({
+  value,
+  onChange,
+  onClose,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  onClose: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    const handler = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        onClose();
+      }
     };
     setTimeout(() => document.addEventListener("mousedown", handler), 0);
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
   return (
-    <div ref={ref} style={{
-      position: "absolute", bottom: "calc(100% + 12px)", left: "50%",
-      transform: "translateX(-50%)",
-      background: "rgba(28,20,33,0.97)", border: "1px solid rgba(251,144,176,0.25)",
-      borderRadius: 14, padding: "16px 20px", minWidth: 260,
-      boxShadow: "0 8px 28px rgba(0,0,0,0.55)", zIndex: 200,
-      animation: "menuIn 0.18s cubic-bezier(.22,1,.36,1)",
-    }}>
+    <div
+      ref={ref}
+      style={{
+        position: "absolute",
+        bottom: "calc(100% + 12px)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        background: "rgba(28,20,33,0.97)",
+        border: "1px solid rgba(251,144,176,0.25)",
+        borderRadius: 14,
+        padding: "16px 20px",
+        minWidth: 260,
+        boxShadow: "0 8px 28px rgba(0,0,0,0.55)",
+        zIndex: 200,
+        animation: "menuIn 0.18s cubic-bezier(.22,1,.36,1)",
+      }}
+    >
       <p style={{ fontSize: 13, fontWeight: 600, color: "#ffffff", textAlign: "center", marginBottom: 8, fontFamily: "'Aldrich'" }}>
         Choose Error Percentage
       </p>
@@ -538,173 +673,421 @@ function ErrorSlider({ value, onChange, onClose }: { value: number; onChange: (v
         {Math.round(value * 100)}%
       </p>
       <input
-        type="range" min="0.01" max="0.20" step="0.01" value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        type="range"
+        min="0.01"
+        max="0.20"
+        step="0.01"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
         style={{ width: "100%", accentColor: "#FB90B0" }}
       />
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-        <span style={{ fontSize: 10, color: "#7a6a85" }}>−</span>
-        <span style={{ fontSize: 10, color: "#7a6a85" }}>+</span>
+        <span style={{ fontSize: 10, color: "#7a6a85" }}>Low</span>
+        <span style={{ fontSize: 10, color: "#7a6a85" }}>High</span>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Landing View (home screen with floating bubble)
-// ─────────────────────────────────────────────────────────────────────────────
-
 function LandingView({
-  onSubmit, mode, errorTolerance, onErrorToleranceChange,
+  onSubmit,
+  onUploadDataset,
+  uploadInProgress,
+  mode,
+  errorTolerance,
+  onErrorToleranceChange,
+  datasetLabel,
+  datasetDescription,
+  backendStatus,
+  examplePrompts,
+  capabilities,
+  schemaPreview,
 }: {
-  onSubmit: (p: string) => void;
+  onSubmit: (prompt: string) => void;
+  onUploadDataset: (file: File) => Promise<void>;
+  uploadInProgress: boolean;
   mode: Mode;
   errorTolerance: number;
-  onErrorToleranceChange: (v: number) => void;
+  onErrorToleranceChange: (value: number) => void;
+  datasetLabel: string;
+  datasetDescription: string;
+  backendStatus: string;
+  examplePrompts: string[];
+  capabilities: string[];
+  schemaPreview: Array<{ name: string; type: string; description: string }>;
 }) {
   const [input, setInput] = useState("");
   const [showSlider, setShowSlider] = useState(false);
 
   const handleSubmit = () => {
-    if (input.trim()) { onSubmit(input.trim()); setInput(""); }
+    if (input.trim()) {
+      onSubmit(input.trim());
+      setInput("");
+    }
   };
 
   return (
-    <div style={{
-      flex: 1, display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
-      padding: "40px 24px", position: "relative", overflow: "hidden",
-    }}>
-      <div style={{
-        position: "absolute", width: 320, height: 320, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(162,227,246,0.1) 0%, transparent 70%)",
-        pointerEvents: "none", animation: "glowPulse 4s ease-in-out infinite",
-      }} />
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "40px 24px",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          width: 320,
+          height: 320,
+          borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(162,227,246,0.1) 0%, transparent 70%)",
+          pointerEvents: "none",
+          animation: "glowPulse 4s ease-in-out infinite",
+        }}
+      />
 
-      <div style={{ animation: "floatBubble 5s ease-in-out infinite", marginBottom: 24, zIndex: 1, filter: "drop-shadow(0 10px 28px rgba(162,227,246,0.32))" }}>
+      <div
+        style={{
+          animation: "floatBubble 5s ease-in-out infinite",
+          marginBottom: 24,
+          zIndex: 1,
+          filter: "drop-shadow(0 10px 28px rgba(162,227,246,0.32))",
+        }}
+      >
         <BubbleSmile size={120} />
       </div>
 
-      <p style={{ color: "#ffffff", fontSize: 16, fontWeight: 500, marginBottom: 28, textAlign: "center", zIndex: 1, fontFamily: 'Aldrich'}}>
-        Hello User, What do you wanna know today?
+      <p
+        style={{
+          color: "#ffffff",
+          fontSize: 16,
+          fontWeight: 500,
+          marginBottom: 10,
+          textAlign: "center",
+          zIndex: 1,
+          fontFamily: "'Aldrich'",
+        }}
+      >
+        Ask a question against your backend dataset.
       </p>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 4,
+          marginBottom: 28,
+          zIndex: 1,
+          maxWidth: 620,
+        }}
+      >
+        <p style={{ color: "#FB90B0", fontSize: 12, fontFamily: "'Aldrich'" }}>{datasetLabel}</p>
+        <p style={{ color: "#8f8098", fontSize: 11, fontFamily: "'Aldrich'", textAlign: "center", lineHeight: 1.5 }}>
+          {datasetDescription}
+        </p>
+        <p style={{ color: "#7a6a85", fontSize: 10, fontFamily: "'Aldrich'" }}>{backendStatus}</p>
+      </div>
+
+      {(examplePrompts.length > 0 || capabilities.length > 0 || schemaPreview.length > 0) && (
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 760,
+            display: "grid",
+            gridTemplateColumns: "1.3fr 0.9fr",
+            gap: 14,
+            marginBottom: 26,
+            zIndex: 1,
+          }}
+        >
+          <div
+            style={{
+              border: "1px solid rgba(251,144,176,0.16)",
+              background: "rgba(255,255,255,0.03)",
+              borderRadius: 18,
+              padding: "16px 18px",
+            }}
+          >
+            <p style={{ color: "#ffffff", fontSize: 12, fontFamily: "'Aldrich'", marginBottom: 10 }}>
+              Example Queries
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {examplePrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => onSubmit(prompt)}
+                  style={{
+                    border: "1px solid rgba(162,227,246,0.24)",
+                    background: "rgba(162,227,246,0.06)",
+                    color: "#d9f4fb",
+                    borderRadius: 999,
+                    padding: "7px 12px",
+                    fontSize: 11,
+                    lineHeight: 1.4,
+                    cursor: "pointer",
+                    fontFamily: "'Aldrich'",
+                    textAlign: "left",
+                  }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: 14 }}>
+            <div
+              style={{
+                border: "1px solid rgba(251,144,176,0.16)",
+                background: "rgba(255,255,255,0.03)",
+                borderRadius: 18,
+                padding: "16px 18px",
+              }}
+            >
+              <p style={{ color: "#ffffff", fontSize: 12, fontFamily: "'Aldrich'", marginBottom: 10 }}>
+                Capabilities
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {capabilities.map((capability) => (
+                  <span
+                    key={capability}
+                    style={{
+                      borderRadius: 999,
+                      padding: "4px 9px",
+                      background: "rgba(251,144,176,0.08)",
+                      color: "#FB90B0",
+                      fontSize: 10,
+                      fontFamily: "'Aldrich'",
+                    }}
+                  >
+                    {capability}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div
+              style={{
+                border: "1px solid rgba(251,144,176,0.16)",
+                background: "rgba(255,255,255,0.03)",
+                borderRadius: 18,
+                padding: "16px 18px",
+              }}
+            >
+              <p style={{ color: "#ffffff", fontSize: 12, fontFamily: "'Aldrich'", marginBottom: 10 }}>
+                Schema Preview
+              </p>
+              <div style={{ display: "grid", gap: 8 }}>
+                {schemaPreview.map((field) => (
+                  <div key={field.name} style={{ display: "grid", gap: 2 }}>
+                    <div style={{ color: "#A2E3F6", fontSize: 11, fontFamily: "'Aldrich'" }}>
+                      {field.name} <span style={{ color: "#7a6a85" }}>/ {field.type}</span>
+                    </div>
+                    <div style={{ color: "#8f8098", fontSize: 10, lineHeight: 1.4, fontFamily: "'Aldrich'" }}>
+                      {field.description}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ position: "relative", width: "100%", maxWidth: 680, zIndex: 10 }}>
         {mode === "Regular" && showSlider && (
-          <ErrorSlider
-            value={errorTolerance}
-            onChange={onErrorToleranceChange}
-            onClose={() => setShowSlider(false)}
-          />
+          <ErrorSlider value={errorTolerance} onChange={onErrorToleranceChange} onClose={() => setShowSlider(false)} />
         )}
         {mode === "Regular" && (
-          <button onClick={() => setShowSlider((p) => !p)} style={{
-            position: "absolute", top: -34, right: 0,
-            background: "transparent", border: "1px solid rgba(251,144,176,0.35)",
-            borderRadius: 8, padding: "4px 12px", color: "#FB90B0",
-            fontSize: 11, cursor: "pointer", fontFamily: "'Aldrich'",
-            fontWeight: 500,
-          }}>
-            Error ±{Math.round(errorTolerance * 100)}%
+          <button
+            onClick={() => setShowSlider((prev) => !prev)}
+            type="button"
+            style={{
+              position: "absolute",
+              top: -34,
+              right: 0,
+              background: "transparent",
+              border: "1px solid rgba(251,144,176,0.35)",
+              borderRadius: 8,
+              padding: "4px 12px",
+              color: "#FB90B0",
+              fontSize: 11,
+              cursor: "pointer",
+              fontFamily: "'Aldrich'",
+              fontWeight: 500,
+            }}
+          >
+            Error +/-{Math.round(errorTolerance * 100)}%
           </button>
         )}
-        <InputBar value={input} onChange={setInput} onSubmit={handleSubmit} />
+        <InputBar
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSubmit}
+          onUploadDataset={onUploadDataset}
+          uploadInProgress={uploadInProgress}
+        />
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Bubble Result View
-// ─────────────────────────────────────────────────────────────────────────────
-
 function ResultView({
-  result, convergencePoints, animating, targetError, onSubmit, streaming, prompt,
+  result,
+  streaming,
+  onSubmit,
+  onUploadDataset,
+  uploadInProgress,
+  errorMessage,
+  datasetLabel,
+  mode,
 }: {
   result: QueryResult | null;
-  convergencePoints: { x: number; y: number }[];
-  animating: boolean;
-  targetError: number;
-  onSubmit: (p: string) => void;
   streaming: boolean;
-  prompt: string;
+  onSubmit: (prompt: string) => void;
+  onUploadDataset: (file: File) => Promise<void>;
+  uploadInProgress: boolean;
+  errorMessage: string | null;
+  datasetLabel: string;
+  mode: Mode;
 }) {
   const [input, setInput] = useState("");
 
   const handleSubmit = () => {
-    if (input.trim()) { onSubmit(input.trim()); setInput(""); }
+    if (input.trim()) {
+      onSubmit(input.trim());
+      setInput("");
+    }
   };
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ flex: 1, overflowY: "auto", padding: "80px 32px 8px" }}>
-        <div style={{
-          border: "1.5px solid rgba(251,144,176,0.4)",
-          borderRadius: 16, padding: "20px 22px",
-          background: "rgba(255,255,255,0.025)",
-          animation: "fadeUp 0.3s ease",
-        }}>
-          {/* SQL */}
+        <div
+          style={{
+            border: "1.5px solid rgba(251,144,176,0.4)",
+            borderRadius: 16,
+            padding: "20px 22px",
+            background: "rgba(255,255,255,0.025)",
+            animation: "fadeUp 0.3s ease",
+          }}
+        >
+          <div style={{ marginBottom: 12, color: "#7a6a85", fontSize: 11, fontFamily: "'Aldrich'" }}>
+            Dataset: <span style={{ color: "#FB90B0" }}>{datasetLabel}</span>
+          </div>
+
           {(result || streaming) && (
             <div style={{ marginBottom: 18 }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 8, fontFamily: "'Aldrich'" }}>
                 Generated SQL Query
               </p>
-              <div style={{
-                background: "rgba(0,0,0,0.35)", borderRadius: 8,
-                padding: "10px 14px", fontFamily: "Aldrich",
-                fontSize: 12, color: "#A2E3F6", lineHeight: 1.6,
-              }}>
+              <div
+                style={{
+                  background: "rgba(0,0,0,0.35)",
+                  borderRadius: 8,
+                  padding: "10px 14px",
+                  fontFamily: "Aldrich",
+                  fontSize: 12,
+                  color: "#A2E3F6",
+                  lineHeight: 1.6,
+                }}
+              >
                 {result?.sql ?? <span style={{ color: "#5a4f65" }}>Generating...</span>}
               </div>
             </div>
           )}
 
-          {/* Planner rationale */}
           {result && (
             <div style={{ marginBottom: 18 }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 8, fontFamily: "'Aldrich'" }}>
                 Planner Rationale
               </p>
-              <div style={{
-                background: "rgba(0,0,0,0.25)", borderRadius: 8,
-                padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4,
-              }}>
+              <div
+                style={{
+                  background: "rgba(0,0,0,0.25)",
+                  borderRadius: 8,
+                  padding: "10px 14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                }}
+              >
                 {[
                   ["Strategy", result.strategy],
                   ["Reason", result.strategyReason],
                   ["Target", result.target],
-                ].map(([k, v]) => (
-                  <p key={k} style={{ fontSize: 12, color: "#ffffff", fontFamily: "'Aldrich'", margin: 0 }}>
-                    <span style={{ fontWeight: 600 }}>{k}:</span> {v}
+                ].map(([label, value]) => (
+                  <p key={label} style={{ fontSize: 12, color: "#ffffff", fontFamily: "'Aldrich'", margin: 0 }}>
+                    <span style={{ fontWeight: 600 }}>{label}:</span> {value}
                   </p>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Convergence graph */}
-          {(convergencePoints.length > 0 || result) && (
+          {(result?.convergencePoints.length || streaming) ? (
             <div style={{ width: "100%" }}>
-              <ConvergenceGraph />
+              <ConvergenceGraph
+                points={result?.convergencePoints ?? []}
+                targetError={result?.targetError ?? 5}
+                targetErrors={mode === "Live" ? [1, 5, 10] : undefined}
+                running={streaming}
+              />
+            </div>
+          ) : null}
+
+          {streaming && !result?.convergencePoints.length && (
+            <div
+              style={{
+                height: 200,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 8,
+                marginTop: 8,
+              }}
+            >
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {[0, 1, 2].map((index) => (
+                  <span
+                    key={index}
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "#FB90B0",
+                      display: "inline-block",
+                      animation: `dotBounce 1.2s ease-in-out ${index * 0.2}s infinite`,
+                    }}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Streaming skeleton */}
-          {streaming && convergencePoints.length === 0 && (
-            <div style={{
-              height: 200, display: "flex", alignItems: "center", justifyContent: "center",
-              border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, marginTop: 8,
-            }}>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {[0, 1, 2].map((i) => (
-                  <span key={i} style={{
-                    width: 8, height: 8, borderRadius: "50%", background: "#FB90B0",
-                    display: "inline-block",
-                    animation: `dotBounce 1.2s ease-in-out ${i * 0.2}s infinite`,
-                  }} />
-                ))}
-              </div>
+          {errorMessage && (
+            <div
+              style={{
+                marginTop: 18,
+                padding: "12px 14px",
+                borderRadius: 10,
+                background: "rgba(251,144,176,0.08)",
+                border: "1px solid rgba(251,144,176,0.18)",
+                color: "#ffd9e3",
+                fontSize: 12,
+                fontFamily: "'Aldrich'",
+                lineHeight: 1.5,
+              }}
+            >
+              {errorMessage}
             </div>
           )}
         </div>
@@ -712,85 +1095,260 @@ function ResultView({
 
       <div style={{ padding: "12px 32px 24px", display: "flex", justifyContent: "center" }}>
         <InputBar
-          value={input} onChange={setInput} onSubmit={handleSubmit}
-          placeholder="Ask a follow-up…" disabled={streaming}
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSubmit}
+          onUploadDataset={onUploadDataset}
+          uploadInProgress={uploadInProgress}
+          placeholder="Ask a follow-up..."
+          disabled={streaming}
         />
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main App
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function App() {
   const [mode, setMode] = useState<Mode>("Live");
   const [view, setView] = useState<AppView>("landing");
   const [errorTolerance, setErrorTolerance] = useState(0.05);
   const [streaming, setStreaming] = useState(false);
-  const [result, setResult] = useState<QueryResult | null>(null);
-  const [convergencePoints, setConvergencePoints] = useState<{ x: number; y: number }[]>([]);
-  const [steps, setSteps] = useState<PipelineStep[]>([
-    { id: "sql", label: "SQL", status: "idle" },
-    { id: "plan", label: "Plan", status: "idle" },
-    { id: "approx", label: "Approx", status: "idle" },
-    { id: "exact", label: "Exact", status: "idle" },
-  ]);
+  const [uploadingDataset, setUploadingDataset] = useState(false);
+  const [steps, setSteps] = useState<PipelineStep[]>(INITIAL_STEPS);
+  const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
+  const [datasetError, setDatasetError] = useState<string | null>(null);
+  const [history, setHistory] = useState<string[]>(FALLBACK_HISTORY);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [sqlPayload, setSqlPayload] = useState<SqlGeneratedPayload | null>(null);
+  const [planPayload, setPlanPayload] = useState<PlanReadyPayload | null>(null);
+  const [approxPayload, setApproxPayload] = useState<ApproxProgressPayload | ApproxFinalPayload | null>(null);
+  const [exactPayload, setExactPayload] = useState<ExactResultPayload | null>(null);
+  const [convergencePoints, setConvergencePoints] = useState<QueryResult["convergencePoints"]>([]);
+  const runRef = useRef<QuerySessionRun | null>(null);
 
-  const updateStep = useCallback((id: string, status: PipelineStep["status"]) => {
-    setSteps((prev) =>
-      prev.map((s) => {
-        if (s.id === id) return { ...s, status };
-        if (status === "active" && prev.findIndex((x) => x.id === id) > prev.findIndex((x) => x.id === s.id)) {
-          return { ...s, status: "done" };
+  const selectedDataset = useMemo(() => {
+    if (datasets.length === 0) {
+      return null;
+    }
+
+    return datasets.find((dataset) => dataset.dataset_id === selectedDatasetId) ?? datasets[0];
+  }, [datasets, selectedDatasetId]);
+  const datasetLabel = selectedDataset?.label ?? "Loading dataset";
+  const datasetDescription = selectedDataset?.description ?? "The app is loading the backend dataset catalog.";
+  const examplePrompts = selectedDataset?.example_prompts ?? [];
+  const capabilities = selectedDataset?.capabilities ?? [];
+  const schemaPreview = (selectedDataset?.schema ?? []).slice(0, 4).map((field) => ({
+    name: field.name,
+    type: field.type,
+    description: field.description,
+  }));
+
+  useEffect(() => {
+    let active = true;
+
+    void QUERY_CLIENT.listDatasets()
+      .then((items) => {
+        if (!active) {
+          return;
         }
-        return s;
+        setDatasets(items);
+        setSelectedDatasetId((current) => current ?? items[0]?.dataset_id ?? null);
+        setDatasetError(items.length ? null : "No datasets were returned by the backend.");
       })
+      .catch((error: unknown) => {
+        if (!active) {
+          return;
+        }
+        setDatasetError(error instanceof Error ? error.message : "Failed to load datasets.");
+      });
+
+    return () => {
+      active = false;
+      runRef.current?.stop();
+    };
+  }, []);
+
+  const updateStep = useCallback((id: PipelineStep["id"], status: PipelineStep["status"]) => {
+    setSteps((prev) =>
+      prev.map((step) => {
+        if (step.id === id) {
+          return { ...step, status };
+        }
+
+        const stepIndex = prev.findIndex((value) => value.id === step.id);
+        const targetIndex = prev.findIndex((value) => value.id === id);
+        if (status === "active" && stepIndex < targetIndex && step.status !== "done") {
+          return { ...step, status: "done" };
+        }
+
+        return step;
+      }),
     );
   }, []);
 
-  const handleSubmit = useCallback(async (prompt: string) => {
-    setView("bubble");
-    setResult(null);
+  const resetSessionState = useCallback(() => {
+    setSqlPayload(null);
+    setPlanPayload(null);
+    setApproxPayload(null);
+    setExactPayload(null);
     setConvergencePoints([]);
-    setStreaming(true);
-    setSteps([
-      { id: "sql", label: "SQL", status: "idle" },
-      { id: "plan", label: "Plan", status: "idle" },
-      { id: "approx", label: "Approx", status: "idle" },
-      { id: "exact", label: "Exact", status: "idle" },
-    ]);
+    setErrorMessage(null);
+    setSteps(INITIAL_STEPS);
+  }, []);
+
+  const handleEvent = useCallback(
+    (event: AnyQuerySessionEvent) => {
+      switch (event.type) {
+        case "sql_generated":
+          setSqlPayload(event.payload);
+          updateStep("sql", "active");
+          break;
+        case "plan_ready":
+          setPlanPayload(event.payload);
+          updateStep("plan", "active");
+          break;
+        case "approx_progress":
+          setApproxPayload(event.payload);
+          updateStep("approx", "active");
+          setConvergencePoints((prev) => {
+            const nextPoint = event.payload.convergence_point;
+            const normalizedPoint = {
+              ...nextPoint,
+              relative_error: nextPoint.relative_error * 100,
+            };
+            if (prev.some((point) => point.iteration === nextPoint.iteration)) {
+              return prev;
+            }
+            return [...prev, normalizedPoint];
+          });
+          break;
+        case "approx_final":
+          setApproxPayload(event.payload);
+          updateStep("approx", "done");
+          setConvergencePoints((prev) => {
+            const nextPoint = event.payload.convergence_point;
+            const normalizedPoint = {
+              ...nextPoint,
+              relative_error: nextPoint.relative_error * 100,
+            };
+            if (prev.some((point) => point.iteration === nextPoint.iteration)) {
+              return prev;
+            }
+            return [...prev, normalizedPoint];
+          });
+          break;
+        case "exact_result":
+          setExactPayload(event.payload);
+          setSteps((prev) => prev.map((step) => ({ ...step, status: "done" })));
+          break;
+        case "error":
+          setErrorMessage(event.payload.message);
+          setStreaming(false);
+          break;
+      }
+    },
+    [updateStep],
+  );
+
+  const result = useMemo(
+    () =>
+      buildResult({
+        sqlPayload,
+        planPayload,
+        approxPayload,
+        exactPayload,
+        convergencePoints,
+        fallbackErrorTolerance: errorTolerance,
+      }),
+    [sqlPayload, planPayload, approxPayload, exactPayload, convergencePoints, errorTolerance],
+  );
+
+  const handleUploadDataset = useCallback(async (file: File) => {
+    setUploadingDataset(true);
+    setDatasetError(null);
+    setErrorMessage(null);
 
     try {
-      const res = await runSimulatedPipeline(
-        prompt,
-        errorTolerance,
-        mode,
-        (step) => {
-          if (step === "done") {
-            setSteps((prev) => prev.map((s) => ({ ...s, status: "done" })));
-          } else {
-            updateStep(step, "active");
-          }
-        },
-        (pct, err) => {
-          setConvergencePoints((prev) => [...prev, { x: pct, y: +err.toFixed(2) }]);
-        },
-      );
-      setResult(res);
+      const uploadedDatasets = await QUERY_CLIENT.uploadDataset(file);
+      if (uploadedDatasets.length === 0) {
+        setDatasetError("The upload completed but no datasets were imported.");
+        return;
+      }
+
+      const uploadedIds = new Set(uploadedDatasets.map((dataset) => dataset.dataset_id));
+      setDatasets((current) => [
+        ...uploadedDatasets,
+        ...current.filter((dataset) => !uploadedIds.has(dataset.dataset_id)),
+      ]);
+      setSelectedDatasetId(uploadedDatasets[0].dataset_id);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to upload dataset.";
+      setDatasetError(message);
+      setErrorMessage(message);
     } finally {
-      setStreaming(false);
+      setUploadingDataset(false);
     }
-  }, [errorTolerance, mode, updateStep]);
+  }, []);
+
+  const handleSubmit = useCallback(
+    async (prompt: string) => {
+      if (!selectedDataset) {
+        setErrorMessage(datasetError ?? "No dataset is available yet.");
+        return;
+      }
+
+      runRef.current?.stop();
+      resetSessionState();
+      setView("bubble");
+      setStreaming(true);
+      setHistory((prev) => [prompt, ...prev.filter((item) => item !== prompt)].slice(0, 8));
+
+      try {
+        const run = await QUERY_CLIENT.startSession(
+          {
+            prompt,
+            dataset_id: selectedDataset.dataset_id,
+            live_mode: mode === "Live",
+            error_tolerance: errorTolerance,
+            confidence_level: DEFAULT_CONFIDENCE_LEVEL,
+          },
+          {
+            onEvent: handleEvent,
+            onError: (error) => {
+              setErrorMessage(error.message);
+              setStreaming(false);
+            },
+            onComplete: () => {
+              setStreaming(false);
+            },
+          },
+        );
+
+        runRef.current = run;
+        void run.done.finally(() => {
+          if (runRef.current === run) {
+            setStreaming(false);
+          }
+        });
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Failed to start query session.");
+        setStreaming(false);
+      }
+    },
+    [datasetError, errorTolerance, handleEvent, mode, resetSessionState, selectedDataset],
+  );
 
   const handleNew = () => {
-    setView("landing");
-    setResult(null);
-    setConvergencePoints([]);
+    runRef.current?.stop();
     setStreaming(false);
-    setSteps((prev) => prev.map((s) => ({ ...s, status: "idle" })));
+    setView("landing");
+    resetSessionState();
   };
+
+  const backendStatus = datasetError
+    ? `Dataset load failed: ${datasetError}`
+    : `Source: ${QUERY_CLIENT.source === "mock" ? "mock session stream" : "live backend stream"}`;
 
   return (
     <>
@@ -810,31 +1368,30 @@ export default function App() {
         @keyframes menuIn { from{opacity:0;transform:translateY(6px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
       `}</style>
 
-      <div style={{
-        display: "flex", height: "100vh",
-        background: "#222222",
-        position: "relative",
-      }}>
-        <Sidebar onNew={handleNew} onHistory={(p) => handleSubmit(p)} />
+      <div style={{ display: "flex", height: "100vh", background: "#222222", position: "relative" }}>
+        <Sidebar onNew={handleNew} onHistory={handleSubmit} history={history} datasetLabel={datasetLabel} />
 
-        {/* Main */}
         <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-          {/* Mode toggle */}
           <div style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 10, zIndex: 20 }}>
-            {(["Live", "Regular"] as Mode[]).map((m) => (
-              <button key={m} onClick={() => setMode(m)} style={{
-                padding: "7px 22px", borderRadius: 999,
-                border: "1.5px solid",
-                borderColor: mode === m ? "#FB90B0" : "rgba(255,255,255,0.22)",
-                background: mode === m ? "rgba(251,144,176,0.12)" : "transparent",
-                color: mode === m ? "#FB90B0" : "#9a8aaa",
-                cursor: "pointer", fontSize: 13, fontWeight: 600,
-                fontFamily: "'Aldrich'", transition: "all 0.2s",
-              }}
-                onMouseEnter={(e) => { if (mode !== m) { e.currentTarget.style.borderColor = "rgba(251,144,176,0.45)"; e.currentTarget.style.color = "#ffffff"; } }}
-                onMouseLeave={(e) => { if (mode !== m) { e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)"; e.currentTarget.style.color = "#9a8aaa"; } }}
+            {(["Live", "Regular"] as Mode[]).map((value) => (
+              <button
+                key={value}
+                onClick={() => setMode(value)}
+                type="button"
+                style={{
+                  padding: "7px 22px",
+                  borderRadius: 999,
+                  border: "1.5px solid",
+                  borderColor: mode === value ? "#FB90B0" : "rgba(255,255,255,0.22)",
+                  background: mode === value ? "rgba(251,144,176,0.12)" : "transparent",
+                  color: mode === value ? "#FB90B0" : "#9a8aaa",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: "'Aldrich'",
+                }}
               >
-                {m}
+                {value}
               </button>
             ))}
           </div>
@@ -842,25 +1399,33 @@ export default function App() {
           {view === "landing" ? (
             <LandingView
               onSubmit={handleSubmit}
+              onUploadDataset={handleUploadDataset}
+              uploadInProgress={uploadingDataset}
               mode={mode}
               errorTolerance={errorTolerance}
               onErrorToleranceChange={setErrorTolerance}
+              datasetLabel={datasetLabel}
+              datasetDescription={datasetDescription}
+              backendStatus={backendStatus}
+              examplePrompts={examplePrompts}
+              capabilities={capabilities}
+              schemaPreview={schemaPreview}
             />
           ) : (
             <ResultView
               result={result}
-              convergencePoints={convergencePoints}
-              animating={streaming}
-              targetError={errorTolerance}
-              onSubmit={handleSubmit}
               streaming={streaming}
-              prompt=""
+              onSubmit={handleSubmit}
+              onUploadDataset={handleUploadDataset}
+              uploadInProgress={uploadingDataset}
+              errorMessage={errorMessage}
+              datasetLabel={datasetLabel}
+              mode={mode}
             />
           )}
         </main>
 
-        {/* Status Panel */}
-        <StatusPanel steps={steps} result={result} streaming={streaming} />
+        <StatusPanel steps={steps} result={result} streaming={streaming} errorMessage={errorMessage} />
       </div>
     </>
   );

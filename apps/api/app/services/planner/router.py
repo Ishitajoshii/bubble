@@ -21,14 +21,6 @@ def route_query(
         f"Within {target_error_pct:g}% at {round(confidence_level * 100):.0f}% confidence"
     )
 
-    if live_mode:
-        return _exact_fallback(
-            confidence_level=confidence_level,
-            target_error_pct=target_error_pct,
-            target_summary=target_summary,
-            reason="Live mode is not implemented yet.",
-        )
-
     if query is None:
         return _exact_fallback(
             confidence_level=confidence_level,
