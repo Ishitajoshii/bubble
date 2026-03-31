@@ -11,6 +11,7 @@ import type {
   DatasetSummary,
   ExactResultPayload,
   PlanReadyPayload,
+  QueryHistoryItem,
   QueryStrategy,
   SqlGeneratedPayload,
 } from "./types/query";
@@ -58,14 +59,6 @@ const INITIAL_STEPS: PipelineStep[] = [
   { id: "plan", label: "Plan", status: "idle" },
   { id: "approx", label: "Approx", status: "idle" },
   { id: "exact", label: "Exact", status: "idle" },
-];
-
-const FALLBACK_HISTORY = [
-  "Total revenue by region last quarter",
-  "Count distinct users in Jan 2024",
-  "Average API response time today",
-  "Sum of orders by product category",
-  "Top 10 customers by spend",
 ];
 
 const STRATEGY_LABELS: Record<QueryStrategy, string> = {
@@ -338,14 +331,30 @@ function InputBar({
 function Sidebar({
   onNew,
   onHistory,
+  onShowHistory,
   history,
   datasetLabel,
 }: {
   onNew: () => void;
-  onHistory: (prompt: string) => void;
-  history: string[];
+  onHistory: (item: QueryHistoryItem) => void;
+  onShowHistory: () => void;
+  history: QueryHistoryItem[];
   datasetLabel: string;
 }) {
+  const historySectionRef = useRef<HTMLDivElement | null>(null);
+
+  const formatHistoryMeta = (item: QueryHistoryItem): string => {
+    const modeLabel = item.live_mode ? "Live" : "Regular";
+    const errorLabel = `${Math.round(item.error_tolerance * 100)}%`;
+    const timestamp = new Date(item.created_at).toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    return `${item.dataset_label} | ${modeLabel} | +/-${errorLabel} | ${timestamp}`;
+  };
+
   return (
     <aside
       style={{
@@ -392,7 +401,14 @@ function Sidebar({
         {[
           { icon: <NewChatIcon />, label: "New Chat", action: onNew },
           { icon: <SearchIcon />, label: "Query Source", action: () => undefined },
-          { icon: <HistoryIcon />, label: "History", action: () => undefined },
+          {
+            icon: <HistoryIcon />,
+            label: "History",
+            action: () => {
+              onShowHistory();
+              historySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            },
+          },
         ].map(({ icon, label, action }) => (
           <button
             key={label}
@@ -420,30 +436,41 @@ function Sidebar({
         ))}
       </nav>
 
-      <div style={{ padding: "18px 10px 0", flex: 1 }}>
-        {history.map((item) => (
-          <button
-            key={item}
-            onClick={() => onHistory(item)}
-            type="button"
-            style={{
-              display: "block",
-              width: "100%",
-              textAlign: "left",
-              padding: "7px 12px",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              color: "#7a6a85",
-              fontSize: 12,
-              lineHeight: 1.45,
-              fontFamily: "'Aldrich'",
-              marginBottom: 2,
-            }}
-          >
-            {item}
-          </button>
-        ))}
+      <div ref={historySectionRef} style={{ padding: "18px 10px 0", flex: 1 }}>
+        <div style={{ padding: "0 12px 8px", color: "#FB90B0", fontSize: 11, fontFamily: "'Aldrich'" }}>
+          Recent Queries
+        </div>
+        {history.length === 0 ? (
+          <div style={{ padding: "0 12px", color: "#7a6a85", fontSize: 11, lineHeight: 1.5, fontFamily: "'Aldrich'" }}>
+            No history yet.
+          </div>
+        ) : (
+          history.map((item) => (
+            <button
+              key={item.session_id}
+              onClick={() => onHistory(item)}
+              type="button"
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                padding: "10px 12px",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                color: "#7a6a85",
+                fontSize: 12,
+                lineHeight: 1.45,
+                fontFamily: "'Aldrich'",
+                marginBottom: 4,
+                borderRadius: 10,
+              }}
+            >
+              <div style={{ color: "#ffffff", marginBottom: 4 }}>{item.prompt}</div>
+              <div style={{ color: "#7a6a85", fontSize: 10 }}>{formatHistoryMeta(item)}</div>
+            </button>
+          ))
+        )}
       </div>
     </aside>
   );
@@ -1118,7 +1145,7 @@ export default function App() {
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
   const [datasetError, setDatasetError] = useState<string | null>(null);
-  const [history, setHistory] = useState<string[]>(FALLBACK_HISTORY);
+  const [history, setHistory] = useState<QueryHistoryItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [sqlPayload, setSqlPayload] = useState<SqlGeneratedPayload | null>(null);
   const [planPayload, setPlanPayload] = useState<PlanReadyPayload | null>(null);
@@ -1163,10 +1190,33 @@ export default function App() {
         setDatasetError(error instanceof Error ? error.message : "Failed to load datasets.");
       });
 
+    void QUERY_CLIENT.listHistory()
+      .then((items) => {
+        if (!active) {
+          return;
+        }
+        setHistory(items);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setHistory([]);
+      });
+
     return () => {
       active = false;
       runRef.current?.stop();
     };
+  }, []);
+
+  const refreshHistory = useCallback(async () => {
+    try {
+      const items = await QUERY_CLIENT.listHistory();
+      setHistory(items);
+    } catch {
+      setHistory([]);
+    }
   }, []);
 
   const updateStep = useCallback((id: PipelineStep["id"], status: PipelineStep["status"]) => {
@@ -1291,27 +1341,45 @@ export default function App() {
     }
   }, []);
 
-  const handleSubmit = useCallback(
-    async (prompt: string) => {
-      if (!selectedDataset) {
+  const runQuery = useCallback(
+    async ({
+      prompt,
+      datasetId,
+      liveMode,
+      errorToleranceValue,
+      confidenceLevel,
+    }: {
+      prompt: string;
+      datasetId?: string;
+      liveMode?: boolean;
+      errorToleranceValue?: number;
+      confidenceLevel?: number;
+    }) => {
+      const resolvedDatasetId = datasetId ?? selectedDataset?.dataset_id ?? null;
+      const dataset = datasets.find((item) => item.dataset_id === resolvedDatasetId) ?? null;
+      if (!dataset) {
         setErrorMessage(datasetError ?? "No dataset is available yet.");
         return;
       }
 
+      const resolvedLiveMode = liveMode ?? (mode === "Live");
+      const resolvedErrorTolerance = errorToleranceValue ?? errorTolerance;
+      const resolvedConfidenceLevel = confidenceLevel ?? DEFAULT_CONFIDENCE_LEVEL;
+
       runRef.current?.stop();
       resetSessionState();
+      setSelectedDatasetId(dataset.dataset_id);
       setView("bubble");
       setStreaming(true);
-      setHistory((prev) => [prompt, ...prev.filter((item) => item !== prompt)].slice(0, 8));
 
       try {
         const run = await QUERY_CLIENT.startSession(
           {
             prompt,
-            dataset_id: selectedDataset.dataset_id,
-            live_mode: mode === "Live",
-            error_tolerance: errorTolerance,
-            confidence_level: DEFAULT_CONFIDENCE_LEVEL,
+            dataset_id: dataset.dataset_id,
+            live_mode: resolvedLiveMode,
+            error_tolerance: resolvedErrorTolerance,
+            confidence_level: resolvedConfidenceLevel,
           },
           {
             onEvent: handleEvent,
@@ -1326,6 +1394,7 @@ export default function App() {
         );
 
         runRef.current = run;
+        void refreshHistory();
         void run.done.finally(() => {
           if (runRef.current === run) {
             setStreaming(false);
@@ -1336,7 +1405,29 @@ export default function App() {
         setStreaming(false);
       }
     },
-    [datasetError, errorTolerance, handleEvent, mode, resetSessionState, selectedDataset],
+    [datasetError, datasets, errorTolerance, handleEvent, mode, refreshHistory, resetSessionState, selectedDataset],
+  );
+
+  const handleSubmit = useCallback(
+    async (prompt: string) => {
+      await runQuery({ prompt });
+    },
+    [runQuery],
+  );
+
+  const handleHistorySelect = useCallback(
+    async (item: QueryHistoryItem) => {
+      setMode(item.live_mode ? "Live" : "Regular");
+      setErrorTolerance(item.error_tolerance);
+      await runQuery({
+        prompt: item.prompt,
+        datasetId: item.dataset_id,
+        liveMode: item.live_mode,
+        errorToleranceValue: item.error_tolerance,
+        confidenceLevel: item.confidence_level,
+      });
+    },
+    [runQuery],
   );
 
   const handleNew = () => {
@@ -1369,7 +1460,13 @@ export default function App() {
       `}</style>
 
       <div style={{ display: "flex", height: "100vh", background: "#222222", position: "relative" }}>
-        <Sidebar onNew={handleNew} onHistory={handleSubmit} history={history} datasetLabel={datasetLabel} />
+        <Sidebar
+          onNew={handleNew}
+          onHistory={handleHistorySelect}
+          onShowHistory={() => setView("landing")}
+          history={history}
+          datasetLabel={datasetLabel}
+        />
 
         <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
           <div style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 10, zIndex: 20 }}>

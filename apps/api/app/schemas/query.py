@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 
 class CreateQuerySessionRequest(BaseModel):
@@ -11,3 +12,18 @@ class CreateQuerySessionRequest(BaseModel):
 
 class CreateQuerySessionResponse(BaseModel):
     session_id: str
+
+
+class QueryHistoryItem(BaseModel):
+    session_id: str
+    prompt: str
+    dataset_id: str
+    dataset_label: str
+    live_mode: bool
+    error_tolerance: float
+    confidence_level: float
+    created_at: datetime
+
+
+class QueryHistoryListResponse(BaseModel):
+    items: list[QueryHistoryItem] = Field(default_factory=list)

@@ -32,6 +32,21 @@ export interface CreateQuerySessionResponse {
   session_id: string;
 }
 
+export interface QueryHistoryItem {
+  session_id: string;
+  prompt: string;
+  dataset_id: string;
+  dataset_label: string;
+  live_mode: boolean;
+  error_tolerance: number;
+  confidence_level: number;
+  created_at: string;
+}
+
+export interface QueryHistoryListResponse {
+  items: QueryHistoryItem[];
+}
+
 export interface DatasetField {
   name: string;
   type: string;
