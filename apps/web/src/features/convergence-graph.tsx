@@ -246,6 +246,9 @@ export default function ConvergenceGraph({
       ? `${smoothedPath} L ${pathCoords[pathCoords.length - 1].x} ${H - PAD.bottom} L ${pathCoords[0].x} ${H - PAD.bottom} Z`
       : "";
   const formatThreshold = (value: number): string => (Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1));
+  const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
+  const graphRight = W - PAD.right;
+  const graphBottom = H - PAD.bottom;
 
   return (
     <div style={{ width: "100%" }}>
@@ -452,21 +455,50 @@ export default function ConvergenceGraph({
         ))}
 
         {hovered && hovered.point !== currentPoint && (
-          <g>
-            <circle cx={hovered.x} cy={hovered.y} r="4" fill="#1b1520" stroke="#A2E3F6" strokeWidth="1.5" />
-            <g transform={`translate(${Math.min(hovered.x + 14, W - PAD.right - 100)},${Math.max(hovered.y - 62, PAD.top)})`}>
-              <rect rx="8" ry="8" width="96" height="56" fill="#222222" stroke="rgba(251,144,176,0.22)" strokeWidth="1" opacity="0.97" />
-              <text x="10" y="17" fill="#ffffff" fontSize="9" fontFamily="Aldrich" fontWeight="400">
-                ITER {hovered.point.iteration}
-              </text>
-              <text x="10" y="31" fill="#ffffff" fontSize="10" fontFamily="Aldrich" fontWeight="400">
-                Error: {hovered.point.relative_error.toFixed(1)}%
-              </text>
-              <text x="10" y="46" fill="#ffffff" fontSize="8.5" fontFamily="Aldrich" fontWeight="400">
-                {hovered.point.elapsed_ms}ms | {hovered.point.data_scanned_pct.toFixed(1)}% scanned
-              </text>
-            </g>
-          </g>
+          (() => {
+            const tooltipLines = [
+              `ITER ${hovered.point.iteration}`,
+              `Error: ${hovered.point.relative_error.toFixed(1)}%`,
+              `${hovered.point.elapsed_ms}ms | ${hovered.point.data_scanned_pct.toFixed(1)}% scanned`,
+            ];
+            const tooltipCharWidths = [5.8, 6.2, 5.2];
+            const tooltipPaddingX = 10;
+            const tooltipWidth =
+              Math.max(
+                ...tooltipLines.map((line, index) => line.length * tooltipCharWidths[index]),
+              ) +
+              tooltipPaddingX * 2 - 2;
+            const tooltipHeight = 56;
+            const tooltipX = clamp(hovered.x + 12, PAD.left + 4, W - PAD.right - tooltipWidth - 4);
+            const tooltipY = clamp(hovered.y - tooltipHeight - 10, PAD.top + 4, H - PAD.bottom - tooltipHeight - 4);
+
+            return (
+              <g>
+                <circle cx={hovered.x} cy={hovered.y} r="4" fill="#1b1520" stroke="#A2E3F6" strokeWidth="1.5" />
+                <g transform={`translate(${tooltipX},${tooltipY})`}>
+                  <rect
+                    rx="8"
+                    ry="8"
+                    width={tooltipWidth}
+                    height={tooltipHeight}
+                    fill="#222222"
+                    stroke="rgba(251,144,176,0.22)"
+                    strokeWidth="1"
+                    opacity="0.97"
+                  />
+                  <text x={tooltipPaddingX} y="17" fill="#ffffff" fontSize="9" fontFamily="Aldrich" fontWeight="400">
+                    {tooltipLines[0]}
+                  </text>
+                  <text x={tooltipPaddingX} y="31" fill="#ffffff" fontSize="10" fontFamily="Aldrich" fontWeight="400">
+                    {tooltipLines[1]}
+                  </text>
+                  <text x={tooltipPaddingX} y="46" fill="#ffffff" fontSize="8.5" fontFamily="Aldrich" fontWeight="400">
+                    {tooltipLines[2]}
+                  </text>
+                </g>
+              </g>
+            );
+          })()
         )}
 
         {points.length > 0 && (
@@ -487,8 +519,13 @@ export default function ConvergenceGraph({
               const pillPadX = 12;
               const pillW = label.length * charWidth + pillPadX * 2;
               const pillH = 22;
-              const pillX = bubblePosition.x - pillW / 2;
-              const pillY = bubblePosition.y - 42 - pillH;
+              const pillX = clamp(bubblePosition.x - pillW / 2, PAD.left + 4, graphRight - pillW - 4);
+              const pillAboveY = bubblePosition.y - 42 - pillH;
+              const pillBelowY = bubblePosition.y + 24;
+              const pillY =
+                pillAboveY >= PAD.top + 4
+                  ? pillAboveY
+                  : clamp(pillBelowY, PAD.top + 4, graphBottom - pillH - 4);
               const accentColor = targetMet ? "#A2E3F6" : "#FB90B0";
               return (
                 <g>
@@ -505,7 +542,7 @@ export default function ConvergenceGraph({
                     opacity="0.98"
                   />
                   <text
-                    x={bubblePosition.x}
+                    x={pillX + pillW / 2}
                     y={pillY + pillH / 2 + 3.5}
                     textAnchor="middle"
                     fill="#ffffff"

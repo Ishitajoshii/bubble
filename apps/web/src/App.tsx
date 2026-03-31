@@ -903,7 +903,7 @@ function LandingView({
         </div>
       )}
 
-      <div style={{ position: "relative", width: "100%", maxWidth: 680, zIndex: 10 }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 680, zIndex: 10, marginTop: "auto", paddingTop: 4 }}>
         {mode === "Regular" && showSlider && (
           <ErrorSlider value={errorTolerance} onChange={onErrorToleranceChange} onClose={() => setShowSlider(false)} />
         )}
@@ -1416,10 +1416,8 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Aldrich'; background: #222222; color: #ffffff; height: 100vh; overflow: hidden; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(251,144,176,0.3); border-radius: 2px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(251,144,176,0.5); }
+        * { scrollbar-width: none; -ms-overflow-style: none; }
+        *::-webkit-scrollbar { width: 0; height: 0; display: none; }
         input::placeholder, textarea::placeholder { color: #5a4f65; }
         @keyframes floatBubble { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
         @keyframes glowPulse { 0%,100%{opacity:.7;transform:scale(1)} 50%{opacity:1;transform:scale(1.07)} }
